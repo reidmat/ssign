@@ -10,6 +10,7 @@ Usage:
 import argparse
 import os
 import re
+import socket
 import subprocess
 import sys
 import threading
@@ -57,6 +58,28 @@ def main():
 
     print(BANNER, flush=True)
 
+    # Find a free port, starting from the requested one
+    def _port_free(p):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("localhost", p))
+                return True
+            except OSError:
+                return False
+
+    port = args.port
+    if not _port_free(port):
+        for candidate in range(port + 1, port + 50):
+            if _port_free(candidate):
+                print(f"  Port {port} is in use, using {candidate} instead.",
+                      flush=True)
+                port = candidate
+                break
+        else:
+            print(f"Error: No free port found in range {port}-{port+49}",
+                  file=sys.stderr)
+            sys.exit(1)
+
     # Find the Streamlit app file and config
     app_dir = os.path.dirname(os.path.abspath(__file__))
     app_file = os.path.join(app_dir, "Home.py")
@@ -82,7 +105,7 @@ def main():
     # Build Streamlit command
     cmd = [
         sys.executable, "-m", "streamlit", "run", app_file,
-        "--server.port", str(args.port),
+        "--server.port", str(port),
         "--server.headless", "true" if args.no_browser else "false",
         "--server.maxUploadSize", "500",
         "--server.maxMessageSize", "500",
@@ -90,11 +113,12 @@ def main():
         "--server.enableCORS", "false",
     ]
 
-    port = args.port
+    url = f"http://localhost:{port}"
     if args.no_browser:
-        print(f"  Open in browser: http://localhost:{port}", flush=True)
+        print(f"  Open in browser: {url}", flush=True)
     else:
-        print(f"  Opening http://localhost:{port} ...", flush=True)
+        print(f"  Opening... If nothing automatically opens, try pasting", flush=True)
+        print(f"  this into your browser: {url}", flush=True)
     print(flush=True)
 
     try:
