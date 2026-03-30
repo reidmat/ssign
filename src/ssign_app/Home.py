@@ -178,26 +178,48 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
         with open(os.path.join(outdir, "ssign_summary.txt"), 'w') as f:
             f.write('\n'.join(summary_parts))
 
-    # ── 3. Flatten figures into one directory ──
+    # ── 3. Regenerate combined figures from merged data ──
+    # Remove per-genome figure subdirectories
     fig_base = os.path.join(outdir, "figures")
     if os.path.isdir(fig_base):
-        multi = len(sample_names) > 1
-        for entry in list(os.listdir(fig_base)):
-            subdir = os.path.join(fig_base, entry)
-            if not os.path.isdir(subdir):
-                continue
-            for fig_file in os.listdir(subdir):
-                src = os.path.join(subdir, fig_file)
-                if not os.path.isfile(src):
-                    continue
-                # Prefix with sample name when multiple genomes
-                dst_name = f"{entry}_{fig_file}" if multi else fig_file
-                shutil.move(src, os.path.join(fig_base, dst_name))
-            # Remove now-empty subdirectory
-            try:
-                os.rmdir(subdir)
-            except OSError:
-                pass
+        shutil.rmtree(fig_base)
+
+    # Extract the substrates section from the merged CSV and re-run
+    # the figure generator once on the combined data
+    combined_csv = os.path.join(outdir, "ssign_results.csv")
+    if os.path.exists(combined_csv):
+        try:
+            import io as _io
+            with open(combined_csv) as f:
+                lines = f.readlines()
+
+            # Substrates are after the blank separator line
+            sub_block = None
+            for i, line in enumerate(lines):
+                if line.strip() == '':
+                    sub_block = ''.join(lines[i + 1:])
+                    break
+            if sub_block is None:
+                sub_block = ''.join(lines)  # no separator = all substrates
+
+            if sub_block.strip():
+                # Write to temp file for figure generator
+                import tempfile
+                tmp = tempfile.NamedTemporaryFile(
+                    mode='w', suffix='_combined.csv', delete=False,
+                )
+                tmp.write(sub_block)
+                tmp.close()
+
+                from ssign_app.core.runner import run_script
+                run_script("generate_figures.py", [
+                    "--master-csvs", tmp.name,
+                    "--outdir", os.path.join(outdir, "figures"),
+                    "--dpi", "300",
+                ])
+                os.unlink(tmp.name)
+        except Exception:
+            pass
 
 # ─────────────────────────────────────────────────────────────────────
 # Header
