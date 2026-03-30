@@ -1166,12 +1166,19 @@ with tab_run:
             resume = st.session_state.get("resume_run", False)
 
             if n_genomes_to_run > 1:
+                import threading
                 from concurrent.futures import ThreadPoolExecutor, as_completed
+                from streamlit.runtime.scriptrunner import get_script_run_ctx, add_script_run_ctx
+
+                # Capture Streamlit's script context so worker threads can
+                # update progress widgets without "missing ScriptRunContext" warnings
+                _ctx = get_script_run_ctx()
 
                 # Limit concurrent genomes to avoid overwhelming cloud APIs
                 max_parallel = min(n_genomes_to_run, 3)
 
                 def _run_one_genome(idx):
+                    add_script_run_ctx(threading.current_thread(), _ctx)
                     cfg = genome_configs[idx]
                     bar, status = genome_progress[idx]
 
