@@ -98,6 +98,107 @@ _GATE_MSG = (
     "(Resume / Start fresh / Selective rerun) before continuing."
 )
 
+
+def _merge_genome_outputs(outdir: str, sample_names: list[str]):
+    """Merge per-genome output files into single combined files.
+
+    After each genome's PipelineRunner produces {sample_id}_results.csv,
+    {sample_id}_summary.txt, and figures/{sample_id}/, this function
+    combines them into ssign_results.csv, ssign_summary.txt, and a flat
+    figures/ directory.
+    """
+    import pandas as pd
+    import io as _io
+
+    # ── 1. Merge results CSVs ──
+    all_systems = []
+    all_subs = []
+    for sid in sample_names:
+        csv_path = os.path.join(outdir, f"{sid}_results.csv")
+        if not os.path.exists(csv_path):
+            continue
+        with open(csv_path) as f:
+            lines = f.readlines()
+
+        # Split at blank separator row (systems above, secreted proteins below)
+        sep_idx = None
+        for i, line in enumerate(lines):
+            if line.strip() == '':
+                sep_idx = i
+                break
+
+        if sep_idx is not None:
+            sys_block = ''.join(lines[:sep_idx])
+            sub_block = ''.join(lines[sep_idx + 1:])
+        else:
+            sys_block = ''
+            sub_block = ''.join(lines)
+
+        if sys_block.strip():
+            try:
+                all_systems.append(pd.read_csv(_io.StringIO(sys_block)))
+            except Exception:
+                pass
+        if sub_block.strip():
+            try:
+                all_subs.append(pd.read_csv(_io.StringIO(sub_block)))
+            except Exception:
+                pass
+
+        os.remove(csv_path)
+
+    combined_csv = os.path.join(outdir, "ssign_results.csv")
+    with open(combined_csv, 'w', newline='') as f:
+        wrote = False
+        if all_systems:
+            pd.concat(all_systems, ignore_index=True).to_csv(f, index=False)
+            wrote = True
+        if all_subs:
+            if wrote:
+                f.write('\n')
+            pd.concat(all_subs, ignore_index=True).to_csv(f, index=False)
+
+    # ── 2. Merge summary texts ──
+    summary_parts = []
+    for sid in sample_names:
+        txt_path = os.path.join(outdir, f"{sid}_summary.txt")
+        if not os.path.exists(txt_path):
+            continue
+        with open(txt_path) as f:
+            content = f.read()
+        if len(sample_names) > 1:
+            summary_parts.append(
+                f"\n{'=' * 60}\n  {sid}\n{'=' * 60}\n\n{content}"
+            )
+        else:
+            summary_parts.append(content)
+        os.remove(txt_path)
+
+    if summary_parts:
+        with open(os.path.join(outdir, "ssign_summary.txt"), 'w') as f:
+            f.write('\n'.join(summary_parts))
+
+    # ── 3. Flatten figures into one directory ──
+    fig_base = os.path.join(outdir, "figures")
+    if os.path.isdir(fig_base):
+        multi = len(sample_names) > 1
+        for entry in list(os.listdir(fig_base)):
+            subdir = os.path.join(fig_base, entry)
+            if not os.path.isdir(subdir):
+                continue
+            for fig_file in os.listdir(subdir):
+                src = os.path.join(subdir, fig_file)
+                if not os.path.isfile(src):
+                    continue
+                # Prefix with sample name when multiple genomes
+                dst_name = f"{entry}_{fig_file}" if multi else fig_file
+                shutil.move(src, os.path.join(fig_base, dst_name))
+            # Remove now-empty subdirectory
+            try:
+                os.rmdir(subdir)
+            except OSError:
+                pass
+
 # ─────────────────────────────────────────────────────────────────────
 # Header
 # ─────────────────────────────────────────────────────────────────────
@@ -1220,7 +1321,12 @@ with tab_run:
 
             st.session_state.results = all_results
             st.session_state.running = False
-            st.session_state.output_dir = st.session_state.get("outdir_input", "./results")
+            outdir_final = st.session_state.get("outdir_input", "./results")
+            st.session_state.output_dir = outdir_final
+
+            # ── Merge per-genome outputs into combined files ──
+            sample_names_run = [c.sample_id for c in genome_configs]
+            _merge_genome_outputs(outdir_final, sample_names_run)
 
             # Show results summary
             n_success = sum(1 for r in all_results if r.success)
@@ -1256,11 +1362,10 @@ with tab_run:
             with mc3:
                 n_secreted = "\u2014"
                 if output_dir:
-                    import glob as _glob
-                    csvs = _glob.glob(os.path.join(output_dir, "*_results.csv"))
-                    if csvs:
+                    results_csv = os.path.join(output_dir, "ssign_results.csv")
+                    if os.path.exists(results_csv):
                         try:
-                            with open(csvs[0]) as _f:
+                            with open(results_csv) as _f:
                                 lines = _f.readlines()
                             for idx, line in enumerate(lines):
                                 if line.strip() == '':
