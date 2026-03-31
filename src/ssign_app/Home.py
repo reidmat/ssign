@@ -1368,7 +1368,7 @@ with tab_run:
                     'dtu': threading.Semaphore(5),    # DTU (DeepLocPro + SignalP): 5 concurrent
                     'ncbi': threading.Semaphore(5),   # NCBI BLASTp: 5 concurrent
                     'mpi': threading.Semaphore(1),    # MPI HHpred: 1 at a time (200 jobs/hr limit)
-                    'ebi': threading.Semaphore(10),   # EBI InterProScan: 10 concurrent
+                    'ebi': threading.Semaphore(5),    # EBI InterProScan: 5 concurrent (30 req/s limit)
                 }
 
                 def _run_one_genome(idx):
