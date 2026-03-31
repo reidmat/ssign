@@ -1161,8 +1161,14 @@ with tab_run:
         if st.session_state.get("run_iprs"):
             total_min += 30
         total_min *= n_genomes
+        total_max = total_min * 2
         genome_note = f" for {n_genomes} genome(s)" if n_genomes > 1 else ""
-        st.info(f"**Estimated total: ~{total_min}-{total_min*2} minutes{genome_note}** (rough estimate, depends on API load)")
+        if total_min >= 100:
+            est_low = f"{total_min / 60:.1f}"
+            est_high = f"{total_max / 60:.1f}"
+            st.info(f"**Estimated total: ~{est_low}-{est_high} hours{genome_note}** (rough estimate, depends on API load)")
+        else:
+            st.info(f"**Estimated total: ~{total_min}-{total_max} minutes{genome_note}** (rough estimate, depends on API load)")
 
         st.divider()
 
