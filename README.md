@@ -24,6 +24,8 @@ Secreted proteins are identified through guilt-by-association: proteins encoded 
 
 ### Stage 3 — Secreted Protein Annotation (Optional)
 
+If your genome is already well-annotated (e.g. from Bakta, Prokka, or NCBI RefSeq), you can skip these tools to save significant time — the existing annotations from your input file are already included in the results. You can always re-run with annotation tools enabled later using the Resume feature.
+
 Each detected secreted protein can be annotated using any combination of five tools, all running via free cloud APIs:
 
 | Tool | What it provides | API provider |

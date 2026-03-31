@@ -847,6 +847,13 @@ with tab_pipeline:
                  "annotations to your secreted protein candidates. Running more tools "
                  "takes longer but provides richer annotations.",
         )
+        st.info(
+            "If your genome is already well-annotated (e.g. from Bakta, Prokka, or "
+            "NCBI RefSeq), you can skip these tools to save significant time. The "
+            "existing annotations from your input file are already included in the "
+            "results. You can always re-run with annotation tools enabled later using "
+            "the **Resume** feature."
+        )
 
         st.markdown("---")
 
