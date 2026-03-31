@@ -1360,15 +1360,19 @@ with tab_run:
                 # update progress widgets without "missing ScriptRunContext" warnings
                 _ctx = get_script_run_ctx()
 
-                # Limit concurrent genomes to avoid overwhelming cloud APIs
-                max_parallel = min(n_genomes_to_run, 3)
+                # Per-API semaphores for concurrency control across genomes.
+                # All genomes run simultaneously — semaphores ensure API rate
+                # limits are respected. While one genome waits for HHpred,
+                # others continue through local steps or other API tools.
+                _api_sem = {
+                    'dtu': threading.Semaphore(5),    # DTU (DeepLocPro + SignalP): 5 concurrent
+                    'ncbi': threading.Semaphore(5),   # NCBI BLASTp: 5 concurrent
+                    'mpi': threading.Semaphore(1),    # MPI HHpred: 1 at a time (200 jobs/hr limit)
+                    'ebi': threading.Semaphore(10),   # EBI InterProScan: 10 concurrent
+                }
 
                 def _run_one_genome(idx):
                     add_script_run_ctx(threading.current_thread(), _ctx)
-                    # Stagger starts to avoid overwhelming cloud APIs
-                    if idx > 0:
-                        import time as _time
-                        _time.sleep(idx * 10)  # 10s offset per genome
                     cfg = genome_configs[idx]
                     bar, status = genome_progress[idx]
 
@@ -1376,10 +1380,11 @@ with tab_run:
                         bar.progress(min(pct, 100) / 100)
                         status.markdown(f"**{step}** \u2014 {msg}")
 
-                    runner = PipelineRunner(cfg, progress_callback=_update)
+                    runner = PipelineRunner(cfg, progress_callback=_update,
+                                            api_semaphores=_api_sem)
                     return runner.run(resume=resume)
 
-                with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+                with ThreadPoolExecutor(max_workers=n_genomes_to_run) as executor:
                     futures = {
                         executor.submit(_run_one_genome, i): i
                         for i in range(n_genomes_to_run)

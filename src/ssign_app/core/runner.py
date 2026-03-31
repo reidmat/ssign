@@ -156,13 +156,17 @@ class PipelineRunner:
     """Runs the ssign pipeline step by step with progress callbacks."""
 
     def __init__(self, config: PipelineConfig,
-                 progress_callback: Optional[Callable] = None):
+                 progress_callback: Optional[Callable] = None,
+                 api_semaphores: Optional[dict] = None):
         self.config = config
         self.progress = progress_callback or (lambda step, pct, msg: None)
         self.results: list[StepResult] = []
         self.work_dir = ""
         self.files = {}  # Track intermediate file paths
         self.start_time: float | None = None
+        # Per-API semaphores for multi-genome concurrency control.
+        # Keys: 'dtu', 'ncbi', 'mpi', 'ebi'. Values: threading.Semaphore
+        self.api_sem = api_semaphores or {}
 
     def check_dependencies(self) -> list[str]:
         """Pre-flight check for required and optional dependencies.
@@ -759,7 +763,14 @@ class PipelineRunner:
         else:
             args.extend(["--mode", "remote"])
 
-        rc, stdout, stderr = run_script("run_deeplocpro.py", args, timeout=14400)
+        sem = self.api_sem.get('dtu')
+        if sem:
+            sem.acquire()
+        try:
+            rc, stdout, stderr = run_script("run_deeplocpro.py", args, timeout=14400)
+        finally:
+            if sem:
+                sem.release()
         if rc == 0:
             self.files['deeplocpro'] = output
             return StepResult("deeplocpro", True, "DeepLocPro complete")
@@ -804,7 +815,14 @@ class PipelineRunner:
         else:
             args.extend(["--mode", "remote"])
 
-        rc, stdout, stderr = run_script("run_signalp.py", args, timeout=14400)
+        sem = self.api_sem.get('dtu')
+        if sem:
+            sem.acquire()
+        try:
+            rc, stdout, stderr = run_script("run_signalp.py", args, timeout=14400)
+        finally:
+            if sem:
+                sem.release()
         if rc == 0:
             self.files['signalp'] = output
             return StepResult("signalp", True, "SignalP complete")
@@ -942,7 +960,14 @@ class PipelineRunner:
         if self.config.blastp_exclude_taxid:
             args.extend(["--exclude-taxid", self.config.blastp_exclude_taxid])
 
-        rc, stdout, stderr = run_script("run_blastp.py", args, timeout=7200)
+        sem = self.api_sem.get('ncbi')
+        if sem:
+            sem.acquire()
+        try:
+            rc, stdout, stderr = run_script("run_blastp.py", args, timeout=7200)
+        finally:
+            if sem:
+                sem.release()
         if rc == 0:
             self.files['blastp'] = output
             return StepResult("blastp", True, "BLASTp complete")
@@ -969,7 +994,15 @@ class PipelineRunner:
             if self.config.hhsuite_uniclust_db:
                 args.extend(["--uniclust-db", self.config.hhsuite_uniclust_db])
 
-        rc, stdout, stderr = run_script("run_hhsuite.py", args, timeout=14400)
+        # HHpred: strict 200 jobs/hour limit — only 1 genome at a time
+        sem = self.api_sem.get('mpi')
+        if sem:
+            sem.acquire()
+        try:
+            rc, stdout, stderr = run_script("run_hhsuite.py", args, timeout=14400)
+        finally:
+            if sem:
+                sem.release()
         if rc == 0:
             self.files['hhsuite'] = output
             return StepResult("hhsuite", True, "HH-suite complete")
@@ -991,7 +1024,14 @@ class PipelineRunner:
         if self.config.interproscan_mode == "local" and self.config.interproscan_db:
             args.extend(["--db", self.config.interproscan_db])
 
-        rc, stdout, stderr = run_script("run_interproscan.py", args, timeout=7200)
+        sem = self.api_sem.get('ebi')
+        if sem:
+            sem.acquire()
+        try:
+            rc, stdout, stderr = run_script("run_interproscan.py", args, timeout=7200)
+        finally:
+            if sem:
+                sem.release()
         if rc == 0:
             self.files['interproscan'] = output
             return StepResult("interproscan", True, "InterProScan complete")
