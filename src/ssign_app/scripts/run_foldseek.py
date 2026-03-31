@@ -140,39 +140,84 @@ def run_remote_foldseek(pdb_content, databases=None, mode="3diaa"):
 
     # FRAGILE: Foldseek web API submission can fail due to server issues
     # If this breaks: check https://search.foldseek.com or use --mode local
-    try:
-        resp = http_requests.post(
-            f"{FOLDSEEK_API}/ticket",
-            data=form_data,
-            files=files_param,
-            timeout=60,
-        )
-        if resp.status_code != 200:
-            logger.warning(f"Foldseek API submit failed: HTTP {resp.status_code}")
+    max_retries = 3
+    retry_delays = [30, 60, 90]  # exponential backoff in seconds
+    ticket_id = None
+
+    for attempt in range(max_retries):
+        try:
+            # Re-create files_param each attempt because the file object
+            # is consumed after the first POST
+            files_param_attempt = {"q": ("query.pdb", pdb_content)}
+            resp = http_requests.post(
+                f"{FOLDSEEK_API}/ticket",
+                data=form_data,
+                files=files_param_attempt,
+                timeout=60,
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Foldseek API submit failed: HTTP {resp.status_code}")
+                if attempt < max_retries - 1:
+                    delay = retry_delays[attempt]
+                    logger.info(f"Retrying in {delay}s (attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(delay)
+                    continue
+                logger.error("Foldseek API submission failed after all retries")
+                return []
+
+            ticket = resp.json()
+            ticket_id = ticket.get("id", "")
+            if not ticket_id:
+                logger.warning("Foldseek API returned empty ticket ID")
+                if attempt < max_retries - 1:
+                    delay = retry_delays[attempt]
+                    logger.info(f"Retrying in {delay}s (attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(delay)
+                    continue
+                logger.error("Foldseek API returned empty ticket ID after all retries")
+                return []
+
+            logger.info(f"Foldseek ticket: {ticket_id}")
+            break  # submission succeeded
+
+        except http_requests.ConnectionError as e:
+            logger.warning(
+                f"Cannot connect to Foldseek API: {e}\n"
+                f"  Foldseek server (search.foldseek.com) may be down."
+            )
+            if attempt < max_retries - 1:
+                delay = retry_delays[attempt]
+                logger.info(f"Retrying in {delay}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(delay)
+                continue
+            logger.error(
+                "Foldseek API unreachable after all retries.\n"
+                "  Consider using --mode local with foldseek installed."
+            )
+            return []
+        except http_requests.Timeout as e:
+            logger.warning(f"Foldseek API timed out during submission: {e}")
+            if attempt < max_retries - 1:
+                delay = retry_delays[attempt]
+                logger.info(f"Retrying in {delay}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(delay)
+                continue
+            logger.error(
+                "Foldseek API timed out after all retries.\n"
+                "  Consider retrying later or using --mode local."
+            )
+            return []
+        except Exception as e:
+            logger.warning(f"Foldseek API error: {e}")
+            if attempt < max_retries - 1:
+                delay = retry_delays[attempt]
+                logger.info(f"Retrying in {delay}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(delay)
+                continue
+            logger.error(f"Foldseek API error after all retries: {e}")
             return []
 
-        ticket = resp.json()
-        ticket_id = ticket.get("id", "")
-        if not ticket_id:
-            return []
-
-        logger.info(f"Foldseek ticket: {ticket_id}")
-
-    except http_requests.ConnectionError as e:
-        logger.warning(
-            f"Cannot connect to Foldseek API: {e}\n"
-            f"  Foldseek server (search.foldseek.com) may be down.\n"
-            f"  Consider using --mode local with foldseek installed."
-        )
-        return []
-    except http_requests.Timeout as e:
-        logger.warning(
-            f"Foldseek API timed out during submission: {e}\n"
-            f"  Consider retrying later or using --mode local."
-        )
-        return []
-    except Exception as e:
-        logger.warning(f"Foldseek API error: {e}")
+    if not ticket_id:
         return []
 
     # Poll for completion (max ~30 min)

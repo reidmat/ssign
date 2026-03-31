@@ -23,7 +23,12 @@ import time
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+import os as _os, sys as _sys
+_scripts_dir = _os.path.dirname(_os.path.abspath(__file__))
+if _scripts_dir not in _sys.path:
+    _sys.path.insert(0, _scripts_dir)
 from ssign_lib.fasta_io import read_fasta
+from dedup_sequences import deduplicate_dict, expand_results_dict
 
 # Terms to exclude from BLASTp hits
 EXCLUDE_TERMS = [
@@ -59,7 +64,28 @@ def run_local_blastp(query_fasta, db_path, evalue, exclude_taxid, num_threads=4)
         cmd.extend(["-negative_taxids", str(exclude_taxid)])
 
     logger.info(f"Running local BLASTp: {' '.join(cmd[:6])}...")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
+    # FRAGILE: subprocess call requires BLAST+ (blastp) on PATH
+    # If this breaks: install BLAST+ or switch to --mode remote
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            f"BLAST+ blastp binary not found: {e}\n"
+            f"  Common causes:\n"
+            f"    - NCBI BLAST+ is not installed or not on PATH\n"
+            f"  How to fix:\n"
+            f"    - Install BLAST+: sudo apt install ncbi-blast+ (Debian/Ubuntu)\n"
+            f"    - Or: conda install -c bioconda blast\n"
+            f"    - Or use --mode remote to submit to NCBI web API"
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"BLASTp timed out after 4 hours: {e}\n"
+            f"  How to fix:\n"
+            f"    - Reduce the number of input sequences\n"
+            f"    - Use a smaller database\n"
+            f"    - Or use --mode remote"
+        ) from e
 
     if result.returncode != 0:
         logger.error(f"BLASTp failed: {result.stderr[:500]}")
@@ -70,7 +96,19 @@ def run_local_blastp(query_fasta, db_path, evalue, exclude_taxid, num_threads=4)
 
 def run_remote_blastp(query_fasta, evalue, exclude_taxid):
     """Submit sequences to NCBI BLASTp web API and parse results."""
-    from Bio.Blast import NCBIWWW, NCBIXML
+    # FRAGILE: Bio.Blast import requires Biopython
+    # If this breaks: pip install biopython
+    try:
+        from Bio.Blast import NCBIWWW, NCBIXML
+    except ImportError as e:
+        raise RuntimeError(
+            f"Biopython not installed (needed for remote BLASTp): {e}\n"
+            f"  Common causes:\n"
+            f"    - biopython package is not installed\n"
+            f"  How to fix:\n"
+            f"    - pip install biopython\n"
+            f"    - Or use --mode local with BLAST+ installed"
+        ) from e
 
     sequences = read_fasta(query_fasta)
     all_hits = {}
@@ -84,41 +122,58 @@ def run_remote_blastp(query_fasta, evalue, exclude_taxid):
         logger.info(f"Submitting batch {i // batch_size + 1} "
                      f"({len(batch)} proteins) to NCBI BLASTp...")
 
-        try:
-            result_handle = NCBIWWW.qblast(
-                "blastp", "nr", batch_fasta,
-                expect=evalue,
-                hitlist_size=10,
-                entrez_query=f"NOT txid{exclude_taxid}[ORGN]" if exclude_taxid else "",
-            )
-            records = NCBIXML.parse(result_handle)
+        # FRAGILE: NCBI BLASTp web API can be overloaded or down for maintenance
+        # If this breaks: try again later or switch to --mode local
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                result_handle = NCBIWWW.qblast(
+                    "blastp", "nr", batch_fasta,
+                    expect=evalue,
+                    hitlist_size=10,
+                    entrez_query=f"NOT txid{exclude_taxid}[ORGN]" if exclude_taxid else "",
+                )
+                records = NCBIXML.parse(result_handle)
 
-            for record in records:
-                query_id = record.query.split()[0]
-                query_len = record.query_length
+                for record in records:
+                    query_id = record.query.split()[0]
+                    query_len = record.query_length
 
-                for alignment in record.alignments:
-                    for hsp in alignment.hsps:
-                        pident = (hsp.identities / hsp.align_length) * 100
-                        qcov = ((hsp.query_end - hsp.query_start + 1) / query_len) * 100
+                    for alignment in record.alignments:
+                        for hsp in alignment.hsps:
+                            pident = (hsp.identities / hsp.align_length) * 100
+                            qcov = ((hsp.query_end - hsp.query_start + 1) / query_len) * 100
 
-                        # CRITICAL: only check PRIMARY description
-                        hit_desc = alignment.hit_def
-                        primary_desc = hit_desc.split(" >")[0]
+                            # CRITICAL: only check PRIMARY description
+                            hit_desc = alignment.hit_def
+                            primary_desc = hit_desc.split(" >")[0]
 
-                        all_hits[query_id] = {
-                            'locus_tag': query_id,
-                            'blastp_hit_accession': alignment.accession,
-                            'blastp_hit_description': primary_desc[:200],
-                            'blastp_pident': round(pident, 1),
-                            'blastp_qcov': round(qcov, 1),
-                            'blastp_evalue': hsp.expect,
-                        }
-                        break  # Best HSP only
-                    break  # Best alignment only
+                            all_hits[query_id] = {
+                                'locus_tag': query_id,
+                                'blastp_hit_accession': alignment.accession,
+                                'blastp_hit_description': primary_desc[:200],
+                                'blastp_pident': round(pident, 1),
+                                'blastp_qcov': round(qcov, 1),
+                                'blastp_evalue': hsp.expect,
+                            }
+                            break  # Best HSP only
+                        break  # Best alignment only
 
-        except Exception as e:
-            logger.warning(f"Batch {i // batch_size + 1} failed: {e}")
+                break  # Success, exit retry loop
+
+            except Exception as e:
+                if attempt < max_retries:
+                    wait = 30 * attempt
+                    logger.warning(
+                        f"Batch {i // batch_size + 1} attempt {attempt}/{max_retries} failed: {e}. "
+                        f"Retrying in {wait}s..."
+                    )
+                    time.sleep(wait)
+                else:
+                    logger.warning(
+                        f"Batch {i // batch_size + 1} failed after {max_retries} attempts: {e}\n"
+                        f"  If NCBI is overloaded, consider using --mode local with BLAST+ installed."
+                    )
 
         if i + batch_size < len(protein_ids):
             time.sleep(15)  # Rate limiting
@@ -198,9 +253,15 @@ def main():
     all_seqs = read_fasta(args.proteins)
     sub_seqs = {k: v for k, v in all_seqs.items() if k in substrate_ids}
 
+    # Deduplicate before remote submissions to save API calls
+    if args.mode == 'remote':
+        unique_seqs, seq_groups = deduplicate_dict(sub_seqs)
+    else:
+        unique_seqs, seq_groups = sub_seqs, {k: [k] for k in sub_seqs}
+
     import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.fasta', delete=False) as tmp:
-        for pid, seq in sub_seqs.items():
+        for pid, seq in unique_seqs.items():
             tmp.write(f">{pid}\n{seq}\n")
         tmp_path = tmp.name
 
@@ -216,6 +277,8 @@ def main():
         os.unlink(tmp_path)
 
     filtered = filter_hits(hits, args.min_pident, args.min_qcov)
+    # Expand results back to all duplicate proteins
+    filtered = expand_results_dict(filtered, seq_groups)
     logger.info(f"{len(filtered)}/{len(hits)} hits pass filters for {args.sample}")
 
     fieldnames = ['locus_tag', 'blastp_hit_accession', 'blastp_hit_description',

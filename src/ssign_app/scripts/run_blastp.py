@@ -124,44 +124,56 @@ def run_remote_blastp(query_fasta, evalue, exclude_taxid):
 
         # FRAGILE: NCBI BLASTp web API can be overloaded or down for maintenance
         # If this breaks: try again later or switch to --mode local
-        try:
-            result_handle = NCBIWWW.qblast(
-                "blastp", "nr", batch_fasta,
-                expect=evalue,
-                hitlist_size=10,
-                entrez_query=f"NOT txid{exclude_taxid}[ORGN]" if exclude_taxid else "",
-            )
-            records = NCBIXML.parse(result_handle)
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                result_handle = NCBIWWW.qblast(
+                    "blastp", "nr", batch_fasta,
+                    expect=evalue,
+                    hitlist_size=10,
+                    entrez_query=f"NOT txid{exclude_taxid}[ORGN]" if exclude_taxid else "",
+                )
+                records = NCBIXML.parse(result_handle)
 
-            for record in records:
-                query_id = record.query.split()[0]
-                query_len = record.query_length
+                for record in records:
+                    query_id = record.query.split()[0]
+                    query_len = record.query_length
 
-                for alignment in record.alignments:
-                    for hsp in alignment.hsps:
-                        pident = (hsp.identities / hsp.align_length) * 100
-                        qcov = ((hsp.query_end - hsp.query_start + 1) / query_len) * 100
+                    for alignment in record.alignments:
+                        for hsp in alignment.hsps:
+                            pident = (hsp.identities / hsp.align_length) * 100
+                            qcov = ((hsp.query_end - hsp.query_start + 1) / query_len) * 100
 
-                        # CRITICAL: only check PRIMARY description
-                        hit_desc = alignment.hit_def
-                        primary_desc = hit_desc.split(" >")[0]
+                            # CRITICAL: only check PRIMARY description
+                            hit_desc = alignment.hit_def
+                            primary_desc = hit_desc.split(" >")[0]
 
-                        all_hits[query_id] = {
-                            'locus_tag': query_id,
-                            'blastp_hit_accession': alignment.accession,
-                            'blastp_hit_description': primary_desc[:200],
-                            'blastp_pident': round(pident, 1),
-                            'blastp_qcov': round(qcov, 1),
-                            'blastp_evalue': hsp.expect,
-                        }
-                        break  # Best HSP only
-                    break  # Best alignment only
+                            all_hits[query_id] = {
+                                'locus_tag': query_id,
+                                'blastp_hit_accession': alignment.accession,
+                                'blastp_hit_description': primary_desc[:200],
+                                'blastp_pident': round(pident, 1),
+                                'blastp_qcov': round(qcov, 1),
+                                'blastp_evalue': hsp.expect,
+                            }
+                            break  # Best HSP only
+                        break  # Best alignment only
 
-        except Exception as e:
-            logger.warning(
-                f"Batch {i // batch_size + 1} failed: {e}\n"
-                f"  If NCBI is overloaded, consider using --mode local with BLAST+ installed."
-            )
+                break  # Success, exit retry loop
+
+            except Exception as e:
+                if attempt < max_retries:
+                    wait = 30 * attempt
+                    logger.warning(
+                        f"Batch {i // batch_size + 1} attempt {attempt}/{max_retries} failed: {e}. "
+                        f"Retrying in {wait}s..."
+                    )
+                    time.sleep(wait)
+                else:
+                    logger.warning(
+                        f"Batch {i // batch_size + 1} failed after {max_retries} attempts: {e}\n"
+                        f"  If NCBI is overloaded, consider using --mode local with BLAST+ installed."
+                    )
 
         if i + batch_size < len(protein_ids):
             time.sleep(15)  # Rate limiting

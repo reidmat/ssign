@@ -106,33 +106,51 @@ def run_remote_interproscan(sequences, output_dir):
     results_file = os.path.join(output_dir, "results.tsv")
     all_results = []
 
+    max_retries = 3
+
     for pid, seq in sequences.items():
+        # Submit job with retry logic (exponential backoff: 30s, 60s, 90s)
+        # Send as FASTA with header so EBI preserves the protein ID
+        fasta_seq = f">{pid}\n{seq}"
+        job_id = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                # NOTE: Hardcoded email for EBI API. EBI requires a valid email for
+                # job submissions but does not verify it. Change if needed.
+                # FRAGILE: EBI REST API submission can fail due to server issues or rate limits
+                # If this breaks: check https://www.ebi.ac.uk/Tools/services/rest/iprscan5 status
+                resp = http_requests.post(
+                    f"{EBI_BASE}/run",
+                    data={
+                        "email": "ssign-pipeline@example.com",
+                        "sequence": fasta_seq,
+                        "goterms": "true",
+                        "pathways": "true",
+                    },
+                    timeout=30,
+                )
+                if resp.status_code != 200:
+                    raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+
+                job_id = resp.text.strip()
+                logger.info(f"Submitted {pid} -> job {job_id}")
+                break
+            except Exception as e:
+                if attempt < max_retries:
+                    wait = 30 * attempt
+                    logger.warning(f"Submission attempt {attempt}/{max_retries} failed for {pid}: {e}. Retrying in {wait}s...")
+                    time.sleep(wait)
+                else:
+                    logger.warning(f"Submission failed for {pid} after {max_retries} attempts: {e}")
+
+        if job_id is None:
+            time.sleep(1)
+            continue
+
         try:
-            # Submit job
-            # Send as FASTA with header so EBI preserves the protein ID
-            fasta_seq = f">{pid}\n{seq}"
-            # NOTE: Hardcoded email for EBI API. EBI requires a valid email for
-            # job submissions but does not verify it. Change if needed.
-            # FRAGILE: EBI REST API submission can fail due to server issues or rate limits
-            # If this breaks: check https://www.ebi.ac.uk/Tools/services/rest/iprscan5 status
-            resp = http_requests.post(
-                f"{EBI_BASE}/run",
-                data={
-                    "email": "ssign-pipeline@example.com",
-                    "sequence": fasta_seq,
-                    "goterms": "true",
-                    "pathways": "true",
-                },
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                logger.warning(f"Submit failed for {pid}: HTTP {resp.status_code}")
-                continue
-
-            job_id = resp.text.strip()
-            logger.info(f"Submitted {pid} -> job {job_id}")
-
             # Poll for completion
+            status = None
             for _ in range(120):
                 time.sleep(15)
                 status_resp = http_requests.get(
@@ -146,6 +164,7 @@ def run_remote_interproscan(sequences, output_dir):
                     break
             else:
                 logger.warning(f"Job {job_id} timed out")
+                time.sleep(1)
                 continue
 
             if status == "FINISHED":

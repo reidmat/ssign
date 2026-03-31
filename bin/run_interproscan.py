@@ -24,7 +24,12 @@ import requests as http_requests
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+import os as _os, sys as _sys
+_scripts_dir = _os.path.dirname(_os.path.abspath(__file__))
+if _scripts_dir not in _sys.path:
+    _sys.path.insert(0, _scripts_dir)
 from ssign_lib.fasta_io import read_fasta
+from dedup_sequences import deduplicate_dict, expand_results_dict
 
 # InterProScan TSV column indices (0-based, no header)
 _COL_PROTEIN_ID = 0
@@ -63,7 +68,26 @@ def run_local_interproscan(query_fasta, db_path, output_dir):
         cmd.extend(["-d", db_path])
 
     logger.info("Running local InterProScan...")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
+    # FRAGILE: subprocess call requires interproscan.sh on PATH
+    # If this breaks: install InterProScan locally or switch to --mode remote
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            f"InterProScan (interproscan.sh) not found: {e}\n"
+            f"  Common causes:\n"
+            f"    - InterProScan is not installed or not on PATH\n"
+            f"  How to fix:\n"
+            f"    - Download from https://www.ebi.ac.uk/interpro/download/\n"
+            f"    - Or use --mode remote to submit to EBI REST API"
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"InterProScan timed out after 4 hours: {e}\n"
+            f"  How to fix:\n"
+            f"    - Reduce the number of input sequences\n"
+            f"    - Or use --mode remote"
+        ) from e
 
     if result.returncode != 0:
         logger.error(f"InterProScan failed: {result.stderr[:500]}")
@@ -82,27 +106,51 @@ def run_remote_interproscan(sequences, output_dir):
     results_file = os.path.join(output_dir, "results.tsv")
     all_results = []
 
+    max_retries = 3
+
     for pid, seq in sequences.items():
+        # Submit job with retry logic (exponential backoff: 30s, 60s, 90s)
+        # Send as FASTA with header so EBI preserves the protein ID
+        fasta_seq = f">{pid}\n{seq}"
+        job_id = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                # NOTE: Hardcoded email for EBI API. EBI requires a valid email for
+                # job submissions but does not verify it. Change if needed.
+                # FRAGILE: EBI REST API submission can fail due to server issues or rate limits
+                # If this breaks: check https://www.ebi.ac.uk/Tools/services/rest/iprscan5 status
+                resp = http_requests.post(
+                    f"{EBI_BASE}/run",
+                    data={
+                        "email": "ssign-pipeline@example.com",
+                        "sequence": fasta_seq,
+                        "goterms": "true",
+                        "pathways": "true",
+                    },
+                    timeout=30,
+                )
+                if resp.status_code != 200:
+                    raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+
+                job_id = resp.text.strip()
+                logger.info(f"Submitted {pid} -> job {job_id}")
+                break
+            except Exception as e:
+                if attempt < max_retries:
+                    wait = 30 * attempt
+                    logger.warning(f"Submission attempt {attempt}/{max_retries} failed for {pid}: {e}. Retrying in {wait}s...")
+                    time.sleep(wait)
+                else:
+                    logger.warning(f"Submission failed for {pid} after {max_retries} attempts: {e}")
+
+        if job_id is None:
+            time.sleep(1)
+            continue
+
         try:
-            # Submit job
-            resp = http_requests.post(
-                f"{EBI_BASE}/run",
-                data={
-                    "email": "ssign-pipeline@example.com",
-                    "sequence": seq,
-                    "goterms": "true",
-                    "pathways": "true",
-                },
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                logger.warning(f"Submit failed for {pid}: HTTP {resp.status_code}")
-                continue
-
-            job_id = resp.text.strip()
-            logger.info(f"Submitted {pid} -> job {job_id}")
-
             # Poll for completion
+            status = None
             for _ in range(120):
                 time.sleep(15)
                 status_resp = http_requests.get(
@@ -116,6 +164,7 @@ def run_remote_interproscan(sequences, output_dir):
                     break
             else:
                 logger.warning(f"Job {job_id} timed out")
+                time.sleep(1)
                 continue
 
             if status == "FINISHED":
@@ -125,6 +174,12 @@ def run_remote_interproscan(sequences, output_dir):
                 if tsv_resp.status_code == 200:
                     all_results.append(tsv_resp.text)
 
+        except (http_requests.ConnectionError, http_requests.Timeout) as e:
+            logger.warning(
+                f"EBI InterProScan API connection failed for {pid}: {e}\n"
+                f"  EBI servers may be under maintenance.\n"
+                f"  Consider using --mode local if this persists."
+            )
         except Exception as e:
             logger.warning(f"Failed for {pid}: {e}")
 
@@ -210,19 +265,28 @@ def main():
     all_seqs = read_fasta(args.proteins)
     sub_seqs = {k: v for k, v in all_seqs.items() if k in substrate_ids}
 
+    # Deduplicate before remote submission to save EBI API quota
+    if args.mode == 'remote':
+        unique_seqs, seq_groups = deduplicate_dict(sub_seqs)
+    else:
+        unique_seqs, seq_groups = sub_seqs, {k: [k] for k in sub_seqs}
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Write substrate sequences to temp FASTA
+        # Write unique substrate sequences to temp FASTA
         tmp_fasta = os.path.join(tmpdir, "substrates.fasta")
         with open(tmp_fasta, 'w') as f:
-            for pid, seq in sub_seqs.items():
+            for pid, seq in unique_seqs.items():
                 f.write(f">{pid}\n{seq}\n")
 
         if args.mode == 'local':
             tsv_path = run_local_interproscan(tmp_fasta, args.db, tmpdir)
         else:
-            tsv_path = run_remote_interproscan(sub_seqs, tmpdir)
+            tsv_path = run_remote_interproscan(unique_seqs, tmpdir)
 
-        results = parse_interproscan_tsv(tsv_path, substrate_ids)
+        results_unique = parse_interproscan_tsv(tsv_path, set(unique_seqs.keys()))
+
+    # Expand results back to all duplicates
+    results = expand_results_dict(results_unique, seq_groups)
 
     logger.info(f"Annotated {len(results)}/{len(substrate_ids)} substrates "
                 f"for {args.sample}")

@@ -187,11 +187,18 @@ def parse_hhr(hhr_path, db_prefix):
 # ── Remote mode (MPI Toolkit API) ──
 
 JOB_TIMEOUT = 600  # 10 min max per job (status 7 can hang indefinitely)
-MAX_RETRIES = 1     # Retry once if stuck at MSA building
+MAX_RETRIES = 3     # Per-job retry limit for timeouts / stuck MSA building
+RETRY_BACKOFF = [30, 60, 90]  # Seconds to wait before retry 1, 2, 3
+SUBMIT_MAX_RETRIES = 3  # Per-submission retry limit
+SUBMIT_BACKOFF = [30, 60, 90]  # Seconds to wait before submission retry 1, 2, 3
 
 
 def _submit_one(session, pid, seq, db_config):
-    """Submit a single HHpred job. Returns job_id or None."""
+    """Submit a single HHpred job with exponential backoff retries.
+
+    Retries up to SUBMIT_MAX_RETRIES times on failure with backoff delays
+    defined by SUBMIT_BACKOFF. Returns job_id or None.
+    """
     if not seq.startswith(">"):
         fasta_seq = f">{pid}\n{seq}"
     else:
@@ -203,21 +210,34 @@ def _submit_one(session, pid, seq, db_config):
         **db_config,
     }
 
-    try:
-        resp = session.post(
-            f"{MPI_BASE_URL}/api/jobs/?toolName=hhpred",
-            json=payload,  # MUST be json= not data= (415 error otherwise)
-            timeout=30,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            job_id = data.get("id", data.get("jobID", ""))
-            if job_id:
-                return job_id
-        else:
-            logger.warning(f"Submit failed for {pid}: HTTP {resp.status_code}")
-    except Exception as e:
-        logger.warning(f"Submit failed for {pid}: {e}")
+    for attempt in range(1, SUBMIT_MAX_RETRIES + 1):
+        try:
+            resp = session.post(
+                f"{MPI_BASE_URL}/api/jobs/?toolName=hhpred",
+                json=payload,  # MUST be json= not data= (415 error otherwise)
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                job_id = data.get("id", data.get("jobID", ""))
+                if job_id:
+                    return job_id
+            else:
+                logger.warning(
+                    f"Submit failed for {pid} (attempt {attempt}/{SUBMIT_MAX_RETRIES}): "
+                    f"HTTP {resp.status_code}"
+                )
+        except Exception as e:
+            logger.warning(
+                f"Submit failed for {pid} (attempt {attempt}/{SUBMIT_MAX_RETRIES}): {e}"
+            )
+
+        if attempt < SUBMIT_MAX_RETRIES:
+            backoff = SUBMIT_BACKOFF[attempt - 1]
+            logger.info(f"Retrying submission for {pid} in {backoff}s...")
+            time.sleep(backoff)
+
+    logger.warning(f"All {SUBMIT_MAX_RETRIES} submission attempts failed for {pid}")
     return None
 
 
@@ -281,7 +301,7 @@ def run_remote_hhpred(sequences, db_name="pdb"):
 
     # Phase 2: Poll all jobs in parallel (round-robin)
     pending = dict(job_ids)  # pid → job_id (jobs still waiting)
-    retried = set()  # pids that have been retried
+    retry_count = {}  # pid → number of retries performed so far
 
     while pending:
         to_remove = []
@@ -290,12 +310,21 @@ def run_remote_hhpred(sequences, db_name="pdb"):
 
             # Per-job timeout
             if elapsed > JOB_TIMEOUT:
-                logger.warning(f"Job {job_id} ({pid}) timed out after {elapsed:.0f}s")
+                attempts_so_far = retry_count.get(pid, 0)
+                logger.warning(
+                    f"Job {job_id} ({pid}) timed out after {elapsed:.0f}s "
+                    f"(retry {attempts_so_far}/{MAX_RETRIES})"
+                )
 
-                # Retry once if we haven't already
-                if pid not in retried:
-                    retried.add(pid)
-                    logger.info(f"Retrying {pid} (attempt 2)...")
+                # Retry with exponential backoff if under the limit
+                if attempts_so_far < MAX_RETRIES:
+                    backoff = RETRY_BACKOFF[attempts_so_far]
+                    retry_count[pid] = attempts_so_far + 1
+                    logger.info(
+                        f"Retrying {pid} (attempt {retry_count[pid]}/{MAX_RETRIES}) "
+                        f"after {backoff}s backoff..."
+                    )
+                    time.sleep(backoff)
                     # Get fresh session cookie before retry
                     try:
                         session.get(f"{MPI_BASE_URL}/tools/hhpred", timeout=30)
@@ -308,6 +337,8 @@ def run_remote_hhpred(sequences, db_name="pdb"):
                         logger.info(f"Resubmitted {pid} -> job {new_job_id}")
                         time.sleep(MPI_DELAY)
                         continue
+                    else:
+                        logger.warning(f"Resubmission failed for {pid}, giving up")
                 to_remove.append(pid)
                 continue
 

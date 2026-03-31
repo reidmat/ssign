@@ -15,6 +15,7 @@ import csv
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,23 +26,47 @@ import requests
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+import os as _os, sys as _sys
+_scripts_dir = _os.path.dirname(_os.path.abspath(__file__))
+if _scripts_dir not in _sys.path:
+    _sys.path.insert(0, _scripts_dir)
 from ssign_lib.fasta_io import read_fasta
+from dedup_sequences import deduplicate_dict, expand_results_dict
 
 MPI_BASE_URL = "https://toolkit.tuebingen.mpg.de"
 MPI_DELAY = 20.0  # Seconds between submissions
-MPI_POLL_INTERVAL = 60
+MPI_POLL_INTERVAL = 10  # 10 seconds between polls (jobs take ~90s)
 
-# MPI HHpred defaults
+# MPI HHpred defaults — ALL fields required (missing fields cause silent failure)
+# Discovered via browser curl capture: the session cookie + full payload are critical
 HHPRED_DEFAULTS = {
     "msa_gen_method": "UniRef30",
     "msa_gen_max_iter": "3",
+    "hhpred_incl_eval": "1e-3",
+    "min_seqid_query": "0",
+    "min_cov": "20",
     "ss_scoring": "2",
     "alignmacmode": "loc",
     "macthreshold": "0.3",
     "desc": "250",
-    "min_cov": "20",
     "pmin": "20",
+    "proteomes": "",
 }
+
+# Regex for HHR hit table lines — works for both PDB (desc ends with ;) and Pfam (multiple ;)
+# Fields (from right): (TLen) TRange QRange Cols SS Score Pval Eval Prob
+_HHR_HIT_RE = re.compile(
+    r"^\s*\d+\s+(\S+)\s+(.*?)\s+"
+    r"(\d[\d.E+-]+)\s+"    # Prob
+    r"([\d.E+-]+)\s+"      # E-value
+    r"[\d.E+-]+\s+"        # P-value
+    r"([\d.E+-]+)\s+"      # Score
+    r"[\d.E+-]+\s+"        # SS
+    r"\d+\s+"              # Cols
+    r"\d+-\d+\s+"          # Query HMM range
+    r"\d+-\d+\s+"          # Template HMM range
+    r"\(\d+\)\s*$"         # Template length
+)
 
 STATUS_NAMES = {
     1: "submitted", 2: "queued", 3: "running", 4: "error",
@@ -79,9 +104,20 @@ def run_local_hhsuite(sequences, pfam_db, pdb70_db, uniclust_db, output_dir):
             "-oa3m", a3m_file,
         ]
 
+        # FRAGILE: subprocess call requires hhblits binary on PATH
+        # If this breaks: install HH-suite or switch to --mode remote
         try:
             subprocess.run(cmd_hhblits, capture_output=True, text=True,
                            timeout=600, check=True)
+        except FileNotFoundError as e:
+            raise RuntimeError(
+                f"hhblits binary not found: {e}\n"
+                f"  Common causes:\n"
+                f"    - HH-suite is not installed or not on PATH\n"
+                f"  How to fix:\n"
+                f"    - conda install -c bioconda hhsuite\n"
+                f"    - Or use --mode remote to submit to MPI Toolkit API"
+            ) from e
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logger.warning(f"hhblits failed for {pid}: {e}")
             continue
@@ -97,6 +133,8 @@ def run_local_hhsuite(sequences, pfam_db, pdb70_db, uniclust_db, output_dir):
                 "-d", db_path,
                 "-o", hhr_file,
             ]
+            # FRAGILE: subprocess call requires hhsearch binary on PATH
+            # If this breaks: install HH-suite or switch to --mode remote
             try:
                 subprocess.run(cmd_hhsearch, capture_output=True, text=True,
                                timeout=600, check=True)
@@ -105,6 +143,15 @@ def run_local_hhsuite(sequences, pfam_db, pdb70_db, uniclust_db, output_dir):
                     if pid not in results:
                         results[pid] = {'locus_tag': pid}
                     results[pid].update(hits)
+            except FileNotFoundError as e:
+                raise RuntimeError(
+                    f"hhsearch binary not found: {e}\n"
+                    f"  Common causes:\n"
+                    f"    - HH-suite is not installed or not on PATH\n"
+                    f"  How to fix:\n"
+                    f"    - conda install -c bioconda hhsuite\n"
+                    f"    - Or use --mode remote to submit to MPI Toolkit API"
+                ) from e
             except Exception as e:
                 logger.warning(f"hhsearch {db_name} failed for {pid}: {e}")
 
@@ -122,27 +169,16 @@ def parse_hhr(hhr_path, db_prefix):
             if line.startswith(' No Hit'):
                 in_hits = True
                 continue
-            if in_hits and line.strip() and not line.startswith(' No'):
-                # Parse hit line
-                parts = line.split()
-                if len(parts) >= 8:
-                    hit_id = parts[1]
-                    # Find probability and e-value
-                    try:
-                        prob = float(parts[-5]) if len(parts) > 5 else 0
-                        evalue = float(parts[-4]) if len(parts) > 4 else 999
-                        score = float(parts[-3]) if len(parts) > 3 else 0
-                    except (ValueError, IndexError):
-                        continue
-
-                    desc = ' '.join(parts[1:-5]) if len(parts) > 6 else parts[1]
-
+            if in_hits and line.strip():
+                m = _HHR_HIT_RE.match(line)
+                if m:
+                    hit_id, desc, prob, evalue, score = m.group(1, 2, 3, 4, 5)
                     return {
                         f'{db_prefix}_top1_id': hit_id,
-                        f'{db_prefix}_top1_description': desc[:200],
-                        f'{db_prefix}_top1_probability': prob,
-                        f'{db_prefix}_top1_evalue': evalue,
-                        f'{db_prefix}_top1_score': score,
+                        f'{db_prefix}_top1_description': desc.strip('; ')[:200],
+                        f'{db_prefix}_top1_probability': float(prob),
+                        f'{db_prefix}_top1_evalue': float(evalue),
+                        f'{db_prefix}_top1_score': float(score),
                     }
                 break
     return {}
@@ -150,63 +186,205 @@ def parse_hhr(hhr_path, db_prefix):
 
 # ── Remote mode (MPI Toolkit API) ──
 
-def run_remote_hhpred(sequences, db_name="pdb"):
-    """Submit sequences to MPI Toolkit HHpred API."""
-    db_configs = {
-        "pdb": {"hhsuitedb": "mmcif70/pdb70"},
-        "pfam": {"hhsuitedb": "pfama/pfama"},
+JOB_TIMEOUT = 600  # 10 min max per job (status 7 can hang indefinitely)
+MAX_RETRIES = 3     # Per-job retry limit for timeouts / stuck MSA building
+RETRY_BACKOFF = [30, 60, 90]  # Seconds to wait before retry 1, 2, 3
+SUBMIT_MAX_RETRIES = 3  # Per-submission retry limit
+SUBMIT_BACKOFF = [30, 60, 90]  # Seconds to wait before submission retry 1, 2, 3
+
+
+def _submit_one(session, pid, seq, db_config):
+    """Submit a single HHpred job with exponential backoff retries.
+
+    Retries up to SUBMIT_MAX_RETRIES times on failure with backoff delays
+    defined by SUBMIT_BACKOFF. Returns job_id or None.
+    """
+    if not seq.startswith(">"):
+        fasta_seq = f">{pid}\n{seq}"
+    else:
+        fasta_seq = seq
+
+    payload = {
+        **HHPRED_DEFAULTS,
+        "alignment": fasta_seq,  # CRITICAL: "alignment" NOT "sequence"!
+        **db_config,
     }
 
-    results = {}
-    job_ids = {}
-
-    # Submit jobs
-    for pid, seq in sequences.items():
-        payload = {
-            **HHPRED_DEFAULTS,
-            "alignment": seq,  # CRITICAL: "alignment" NOT "sequence"!
-            **db_configs.get(db_name, db_configs["pdb"]),
-        }
-
+    for attempt in range(1, SUBMIT_MAX_RETRIES + 1):
         try:
-            resp = requests.post(
+            resp = session.post(
                 f"{MPI_BASE_URL}/api/jobs/?toolName=hhpred",
-                data=payload,
+                json=payload,  # MUST be json= not data= (415 error otherwise)
                 timeout=30,
             )
             if resp.status_code == 200:
                 data = resp.json()
                 job_id = data.get("id", data.get("jobID", ""))
                 if job_id:
-                    job_ids[pid] = job_id
-                    logger.info(f"Submitted {pid} -> job {job_id}")
+                    return job_id
             else:
-                logger.warning(f"Submit failed for {pid}: HTTP {resp.status_code}")
+                logger.warning(
+                    f"Submit failed for {pid} (attempt {attempt}/{SUBMIT_MAX_RETRIES}): "
+                    f"HTTP {resp.status_code}"
+                )
         except Exception as e:
-            logger.warning(f"Submit failed for {pid}: {e}")
+            logger.warning(
+                f"Submit failed for {pid} (attempt {attempt}/{SUBMIT_MAX_RETRIES}): {e}"
+            )
 
+        if attempt < SUBMIT_MAX_RETRIES:
+            backoff = SUBMIT_BACKOFF[attempt - 1]
+            logger.info(f"Retrying submission for {pid} in {backoff}s...")
+            time.sleep(backoff)
+
+    logger.warning(f"All {SUBMIT_MAX_RETRIES} submission attempts failed for {pid}")
+    return None
+
+
+def run_remote_hhpred(sequences, db_name="pdb"):
+    """Submit sequences to MPI Toolkit HHpred API.
+
+    Uses parallel polling: submit all jobs first, then poll all concurrently.
+    Includes per-job timeout (10 min) and retry logic for stuck MSA building.
+
+    CRITICAL: Must use requests.Session() for cookie handling.
+    Without session cookies, jobs submit but silently fail during execution.
+    """
+    db_configs = {
+        "pdb": {"hhsuitedb": "mmcif70/pdb70"},
+        "pfam": {"hhsuitedb": "pfama/pfama"},
+    }
+
+    db_config = db_configs.get(db_name, db_configs["pdb"])
+    results = {}
+
+    # CRITICAL: Use Session for cookie handling — without this, jobs fail silently
+    session = requests.Session()
+    # FRAGILE: Session cookie acquisition is CRITICAL for MPI Toolkit.
+    # Without the session cookie obtained from this GET request, job submissions
+    # will appear to succeed (HTTP 200) but the jobs will silently fail during
+    # execution on the server side. This is an undocumented MPI Toolkit requirement.
+    # If this breaks: MPI Toolkit may be down or blocking requests
+    try:
+        session.get(f"{MPI_BASE_URL}/tools/hhpred", timeout=30)  # Get session cookie
+    except requests.ConnectionError as e:
+        raise RuntimeError(
+            f"Cannot connect to MPI Toolkit to obtain session cookie: {e}\n"
+            f"  Common causes:\n"
+            f"    - MPI Toolkit (toolkit.tuebingen.mpg.de) is down\n"
+            f"    - Network/firewall blocking outbound HTTPS\n"
+            f"  How to fix:\n"
+            f"    - Check https://toolkit.tuebingen.mpg.de manually\n"
+            f"    - Or use --mode local with HH-suite installed:\n"
+            f"      conda install -c bioconda hhsuite"
+        ) from e
+    except requests.Timeout as e:
+        raise RuntimeError(
+            f"MPI Toolkit timed out during session initialization: {e}\n"
+            f"  How to fix:\n"
+            f"    - Retry later, or use --mode local with HH-suite installed"
+        ) from e
+
+    # Phase 1: Submit all jobs
+    job_ids = {}  # pid → job_id
+    job_start = {}  # pid → start_time
+    for pid, seq in sequences.items():
+        job_id = _submit_one(session, pid, seq, db_config)
+        if job_id:
+            job_ids[pid] = job_id
+            job_start[pid] = time.time()
+            logger.info(f"Submitted {pid} -> job {job_id}")
         time.sleep(MPI_DELAY)
 
-    # Poll and collect results
-    for pid, job_id in job_ids.items():
-        hits = poll_and_collect(job_id, pid, db_name)
-        if hits:
-            results[pid] = {'locus_tag': pid, **hits}
+    if not job_ids:
+        return results
+
+    # Phase 2: Poll all jobs in parallel (round-robin)
+    pending = dict(job_ids)  # pid → job_id (jobs still waiting)
+    retry_count = {}  # pid → number of retries performed so far
+
+    while pending:
+        to_remove = []
+        for pid, job_id in pending.items():
+            elapsed = time.time() - job_start[pid]
+
+            # Per-job timeout
+            if elapsed > JOB_TIMEOUT:
+                attempts_so_far = retry_count.get(pid, 0)
+                logger.warning(
+                    f"Job {job_id} ({pid}) timed out after {elapsed:.0f}s "
+                    f"(retry {attempts_so_far}/{MAX_RETRIES})"
+                )
+
+                # Retry with exponential backoff if under the limit
+                if attempts_so_far < MAX_RETRIES:
+                    backoff = RETRY_BACKOFF[attempts_so_far]
+                    retry_count[pid] = attempts_so_far + 1
+                    logger.info(
+                        f"Retrying {pid} (attempt {retry_count[pid]}/{MAX_RETRIES}) "
+                        f"after {backoff}s backoff..."
+                    )
+                    time.sleep(backoff)
+                    # Get fresh session cookie before retry
+                    try:
+                        session.get(f"{MPI_BASE_URL}/tools/hhpred", timeout=30)
+                    except Exception:
+                        pass
+                    new_job_id = _submit_one(session, pid, sequences[pid], db_config)
+                    if new_job_id:
+                        pending[pid] = new_job_id
+                        job_start[pid] = time.time()
+                        logger.info(f"Resubmitted {pid} -> job {new_job_id}")
+                        time.sleep(MPI_DELAY)
+                        continue
+                    else:
+                        logger.warning(f"Resubmission failed for {pid}, giving up")
+                to_remove.append(pid)
+                continue
+
+            # Poll
+            try:
+                resp = session.get(f"{MPI_BASE_URL}/api/jobs/{job_id}", timeout=15)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    status = data.get("status", 0)
+
+                    if status == 5:  # Done
+                        hits = collect_hhpred_result(session, job_id, db_name)
+                        if hits:
+                            results[pid] = {'locus_tag': pid, **hits}
+                        to_remove.append(pid)
+                        logger.info(f"Collected {pid} ({elapsed:.0f}s)")
+                    elif status == 4:  # Error
+                        logger.warning(f"Job {job_id} ({pid}) errored after {elapsed:.0f}s")
+                        to_remove.append(pid)
+            except Exception:
+                pass  # Network blip, retry next round
+
+        for pid in to_remove:
+            pending.pop(pid, None)
+
+        if pending:
+            time.sleep(MPI_POLL_INTERVAL)
 
     return results
 
 
-def poll_and_collect(job_id, protein_id, db_prefix, max_polls=120):
-    """Poll MPI Toolkit job and collect results."""
+def poll_and_collect(session, job_id, protein_id, db_prefix, max_polls=60):
+    """Poll a single MPI Toolkit job. Used for legacy compatibility.
+
+    Timeout: 60 polls × 10s = 10 minutes max.
+    """
+    http = session if session else requests
     for _ in range(max_polls):
         try:
-            resp = requests.get(f"{MPI_BASE_URL}/api/jobs/{job_id}", timeout=30)
+            resp = http.get(f"{MPI_BASE_URL}/api/jobs/{job_id}", timeout=15)
             if resp.status_code == 200:
                 data = resp.json()
                 status = data.get("status", 0)
 
                 if status == 5:  # Done
-                    return collect_hhpred_result(job_id, db_prefix)
+                    return collect_hhpred_result(http, job_id, db_prefix)
                 elif status == 4:  # Error
                     logger.warning(f"Job {job_id} ({protein_id}) failed")
                     return {}
@@ -215,39 +393,42 @@ def poll_and_collect(job_id, protein_id, db_prefix, max_polls=120):
 
         time.sleep(MPI_POLL_INTERVAL)
 
-    logger.warning(f"Job {job_id} ({protein_id}) timed out")
+    logger.warning(f"Job {job_id} ({protein_id}) timed out after {max_polls * MPI_POLL_INTERVAL}s")
     return {}
 
 
-def collect_hhpred_result(job_id, db_prefix):
-    """Download and parse HHpred result from MPI Toolkit."""
+def collect_hhpred_result(http, job_id, db_prefix):
+    """Download and parse HHpred result from MPI Toolkit.
+
+    URL discovered from toolkit JS source:
+    /api/jobs/{jobID}/results/files/{jobID}.hhr
+    (NOT /results/{jobID}/hhpred.hhr — that's the SPA HTML)
+    """
     try:
-        resp = requests.get(
-            f"{MPI_BASE_URL}/results/{job_id}/hhpred.hhr",
+        resp = http.get(
+            f"{MPI_BASE_URL}/api/jobs/{job_id}/results/files/{job_id}.hhr",
             timeout=60,
         )
         if resp.status_code != 200:
             return {}
 
-        # Parse HHR content
+        # Parse HHR hit table using regex — handles both PDB and Pfam formats
         in_hits = False
         for line in resp.text.split('\n'):
             if line.startswith(' No Hit'):
                 in_hits = True
                 continue
             if in_hits and line.strip():
-                parts = line.split()
-                if len(parts) >= 6:
-                    try:
-                        return {
-                            f'{db_prefix}_top1_id': parts[1],
-                            f'{db_prefix}_top1_description': ' '.join(parts[1:-5])[:200],
-                            f'{db_prefix}_top1_probability': float(parts[-5]),
-                            f'{db_prefix}_top1_evalue': float(parts[-4]),
-                            f'{db_prefix}_top1_score': float(parts[-3]),
-                        }
-                    except (ValueError, IndexError):
-                        pass
+                m = _HHR_HIT_RE.match(line)
+                if m:
+                    hit_id, desc, prob, evalue, score = m.group(1, 2, 3, 4, 5)
+                    return {
+                        f'{db_prefix}_top1_id': hit_id,
+                        f'{db_prefix}_top1_description': desc.strip('; ')[:200],
+                        f'{db_prefix}_top1_probability': float(prob),
+                        f'{db_prefix}_top1_evalue': float(evalue),
+                        f'{db_prefix}_top1_score': float(score),
+                    }
                 break
     except Exception as e:
         logger.warning(f"Failed to collect {job_id}: {e}")
@@ -279,19 +460,23 @@ def main():
                 sub_seqs, args.pfam_db, args.pdb70_db, args.uniclust_db, tmpdir
             )
     else:
+        # Deduplicate before remote submission to save MPI API quota
+        unique_seqs, seq_groups = deduplicate_dict(sub_seqs)
         # Run against both PDB and Pfam remotely
-        results_pdb = run_remote_hhpred(sub_seqs, "pdb")
-        results_pfam = run_remote_hhpred(sub_seqs, "pfam")
-        # Merge
-        results = {}
-        for pid in sub_seqs:
+        results_pdb = run_remote_hhpred(unique_seqs, "pdb")
+        results_pfam = run_remote_hhpred(unique_seqs, "pfam")
+        # Merge unique results
+        results_unique = {}
+        for pid in unique_seqs:
             entry = {'locus_tag': pid}
             if pid in results_pdb:
                 entry.update(results_pdb[pid])
             if pid in results_pfam:
                 entry.update(results_pfam[pid])
             if len(entry) > 1:
-                results[pid] = entry
+                results_unique[pid] = entry
+        # Expand back to all duplicates
+        results = expand_results_dict(results_unique, seq_groups)
 
     # Determine output columns from results
     all_cols = set()
