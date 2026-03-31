@@ -4,6 +4,164 @@
 
 Built for the [Billerbeck Lab](https://www.imperial.ac.uk/people/s.billerbeck) at Imperial College London. Version 0.1.0 (Beta).
 
+---
+
+## Installation
+
+ssign is a Python package with a browser-based GUI. Installation takes a few minutes and requires no bioinformatics experience.
+
+### Linux (Ubuntu / Debian)
+
+1. **Open a terminal.** Search for "Terminal" in your app launcher, or press `Ctrl+Alt+T`.
+
+2. **Install Python** (if not already installed). Most Linux distributions include Python, but you may need pip and venv:
+
+   ```bash
+   sudo apt install python3 python3-pip python3-venv
+   ```
+
+3. **Create a virtual environment.** This creates an isolated Python environment so ssign's dependencies don't conflict with other software on your system:
+
+   ```bash
+   python3 -m venv ~/.ssign-env && source ~/.ssign-env/bin/activate
+   ```
+
+4. **Install ssign:**
+
+   ```bash
+   pip install ssign
+   ```
+
+5. **Launch ssign:**
+
+   ```bash
+   ssign
+   ```
+
+   This opens a browser-based interface where you upload genome files and configure the pipeline.
+
+> **Tip:** Each time you open a new terminal, reactivate the environment before running ssign:
+> ```bash
+> source ~/.ssign-env/bin/activate && ssign
+> ```
+
+### macOS
+
+1. **Open Terminal.** Search for "Terminal" in Spotlight (`Cmd+Space`), or find it in Applications > Utilities.
+
+2. **Install Python** (if not already installed). The recommended way is via [Homebrew](https://brew.sh/):
+
+   ```bash
+   brew install python
+   ```
+
+3. **Create a virtual environment.** This creates an isolated Python environment so ssign's dependencies don't conflict with other software on your system:
+
+   ```bash
+   python3 -m venv ~/.ssign-env && source ~/.ssign-env/bin/activate
+   ```
+
+4. **Install ssign:**
+
+   ```bash
+   pip install ssign
+   ```
+
+5. **Launch ssign:**
+
+   ```bash
+   ssign
+   ```
+
+   This opens a browser-based interface where you upload genome files and configure the pipeline.
+
+> **Tip:** Each time you open a new terminal, reactivate the environment before running ssign:
+> ```bash
+> source ~/.ssign-env/bin/activate && ssign
+> ```
+
+### Windows (via WSL)
+
+ssign requires the Windows Subsystem for Linux (WSL), which provides a full Linux environment inside Windows.
+
+1. **Open PowerShell as Administrator.** Right-click the Start button and select "Terminal (Admin)" or "PowerShell (Admin)".
+
+2. **Install WSL:**
+
+   ```powershell
+   wsl --install
+   ```
+
+   This installs Ubuntu by default. The download is approximately 1-2 GB.
+
+3. **Restart your computer** when prompted.
+
+4. **Open the Ubuntu app** from the Start menu. On first launch, it will ask you to create a Linux username and password.
+
+5. **Follow the Linux instructions above** (starting from step 2) inside the Ubuntu terminal.
+
+---
+
+## Optional Dependencies
+
+ssign works out of the box with `pip install ssign`. The following optional tools extend its capabilities.
+
+### DeepSecE — additional secreted protein prediction
+
+DeepSecE is a deep learning model that predicts secretion system effectors. It provides an additional layer of evidence alongside DeepLocPro and SignalP. The download is approximately 7.3 GB (ESM protein language model).
+
+```bash
+pip install ssign[deepsece]
+```
+
+Same command on all platforms. Install inside your ssign virtual environment.
+
+### Bakta — higher-quality ORF prediction
+
+If your input is raw FASTA contigs (not GenBank), ssign uses Pyrodigal for gene prediction by default. Bakta provides more comprehensive annotation. After installing the Python package, you also need to download its database (~2 GB).
+
+```bash
+pip install ssign[bakta]
+bakta_db download --output ~/bakta_db --type light
+```
+
+Same command on all platforms. Install inside your ssign virtual environment.
+
+### BLAST+ — ortholog grouping across genomes
+
+When analysing multiple genomes, BLAST+ enables ortholog grouping to identify shared secreted proteins. BLAST+ is not pip-installable and must be installed through your system package manager (~200 MB).
+
+**Linux (Ubuntu / Debian):**
+```bash
+sudo apt install ncbi-blast+
+```
+
+**macOS:**
+```bash
+brew install blast
+```
+
+**Conda (cross-platform):**
+```bash
+conda install -c bioconda blast
+```
+
+### pLM-BLAST — protein language model structural search
+
+pLM-BLAST enables sequence-structure similarity searches using protein language model embeddings. It is not pip-installable and requires local setup. See the [pLM-BLAST GitHub repository](https://github.com/labstructbioinf/pLM-BLAST) for installation instructions.
+
+> **Note:** pLM-BLAST and Foldseek are **ssign-power only** features. They require local databases and/or 3D structure files and are not available through the cloud-based ssign GUI.
+
+### Install all pip-installable optional dependencies
+
+```bash
+pip install ssign[full]
+```
+
+Or combine specific extras: `pip install ssign[deepsece,bakta]`
+
+---
+
 ## Pipeline Overview
 
 ssign runs in four stages:
@@ -24,8 +182,6 @@ Secreted proteins are identified through guilt-by-association: proteins encoded 
 
 ### Stage 3 — Secreted Protein Annotation (Optional)
 
-If you think your genome is already well-annotated, you can skip these tools to save significant time, the existing annotations from your input file are already included in the results. You can always re-run with annotation tools enabled later using the Resume feature.
-
 Each detected secreted protein can be annotated using any combination of five tools:
 
 | Tool | What it provides | API provider |
@@ -33,14 +189,18 @@ Each detected secreted protein can be annotated using any combination of five to
 | **BLASTp** | Sequence homology hits | NCBI |
 | **HHpred** | Remote homology / domain detection | MPI Bioinformatics Toolkit |
 | **InterProScan** | Domain and family annotations | EBI |
-| **Foldseek** | Structural similarity search | Foldseek server |
+| **Foldseek** | Structural similarity search | ssign-power only |
 | **ProtParam** | Physicochemical properties | Local (Biopython) |
 
 Each tool can be independently enabled or disabled in the GUI.
 
+> **Note on well-annotated genomes:** If your genome already has thorough functional annotations, you can skip the optional annotation tools to save significant time. The existing annotations from your input file are already included in the results. You can always re-run with annotation tools enabled later using the Resume feature.
+
 ### Stage 4 — Generate Data and Figures
 
 Merges all results into output tables and generates publication-ready summary figures.
+
+---
 
 ## Supported Input Formats
 
@@ -52,37 +212,7 @@ Merges all results into output tables and generates publication-ready summary fi
 
 GenBank format is recommended because it contains both the nucleotide sequence and gene annotations, allowing ssign to skip the ORF prediction step entirely.
 
-## Installation
-
-Everything is pip-installable.
-
-```bash
-pip install ssign
-```
-
-Then launch the GUI:
-
-```bash
-ssign
-```
-
-This opens an interface where you upload genome files and configure the pipeline.
-
-### Optional dependencies
-
-| Dependency | Size | Install individually | Purpose |
-|-----------|------|---------------------|---------|
-| **DeepSecE** | ~7.3 GB (ESM model) | `pip install ssign[deepsece]` | Additional secreted protein prediction |
-| **Bakta** | ~2 GB (database) | `pip install ssign[bakta]` | Higher-quality ORF prediction for FASTA input |
-| **BLAST+** | ~200 MB | `sudo apt install ncbi-blast+` | Ortholog grouping across genomes (not pip-installable) |
-
-Install all optional Python dependencies with:
-
-```bash
-pip install ssign[full]
-```
-
-Or install only what you need — extras can be combined: `pip install ssign[deepsece,bakta]`
+---
 
 ## Output
 
@@ -95,6 +225,8 @@ ssign produces the following output files:
 | `ssign_summary.txt` | Plain-text summary of detected systems and secreted proteins |
 | `figures/` | Publication-ready figures (system diagrams, annotation summaries) |
 
+---
+
 ## Important: API Fragility
 
 Most annotation and prediction tools in ssign run via free cloud APIs provided by DTU, NCBI, MPI Bioinformatics Toolkit, and EBI. While this means no local database setup is needed, there are trade-offs:
@@ -106,15 +238,19 @@ Most annotation and prediction tools in ssign run via free cloud APIs provided b
 
 If speed and reliability are critical, consider **ssign-power** (see below).
 
+---
+
 ## ssign-power
 
-For local or HPC execution with full local databases (no API dependency), install **ssign-power**. This uses Nextflow DSL2 with Docker or Singularity containers and runs all tools locally.
+For local or HPC execution with full local databases (no API dependency), install **ssign-power**. This uses Nextflow DSL2 with Docker or Singularity containers and runs all tools locally, including Foldseek and pLM-BLAST which are not available in the standard ssign GUI.
 
 ```bash
 nextflow run ssign --input genome.gbff --outdir results -profile docker
 ```
 
 ssign-power requires Nextflow, Java 11+, and Docker or Singularity. It is not needed for normal use — the standard `pip install ssign` workflow covers most use cases.
+
+---
 
 ## Key Parameters
 
@@ -126,6 +262,8 @@ ssign-power requires Nextflow, Java 11+, and Docker or Singularity. It is not ne
 | System completeness | `0.8` | Minimum MacSyFinder wholeness score to accept a system |
 
 All parameters are configurable through the GUI settings panel.
+
+---
 
 ## Citations
 
@@ -154,6 +292,8 @@ If you use ssign in your research, please cite the underlying tools:
 - **Bakta**: Schwengers O, Jelonek L, Dieckmann MA, Beyvers S, Blom J, Goesmann A. Bakta: rapid and standardized annotation of bacterial genomes via alignment-free sequence identification. *Microbial Genomics*. 2021;7(11):000685. [doi:10.1099/mgen.0.000685](https://doi.org/10.1099/mgen.0.000685)
 
 - **Biopython**: Cock PJA, Antao T, Chang JT, Chapman BA, Cox CJ, Dalke A, Friedberg I, Hamelryck T, Kauff F, Wilczynski B, de Hoon MJL. Biopython: freely available Python tools for computational molecular biology and bioinformatics. *Bioinformatics*. 2009;25(11):1422-1423. [doi:10.1093/bioinformatics/btp163](https://doi.org/10.1093/bioinformatics/btp163)
+
+---
 
 ## License
 
