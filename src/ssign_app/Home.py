@@ -90,16 +90,25 @@ if "uploaded_files_data" not in st.session_state:
     st.session_state.uploaded_files_data = []
 
 
+def _has_previous_progress(outdir_val: str) -> bool:
+    """Check if any progress files exist in the output directory."""
+    if not outdir_val or not os.path.isdir(outdir_val):
+        return False
+    import glob
+    # Check for per-genome progress files or legacy shared file
+    return bool(
+        glob.glob(os.path.join(outdir_val, "*_progress.json"))
+        or os.path.exists(os.path.join(outdir_val, "ssign_progress.json"))
+    )
+
+
 def _needs_run_mode_gate() -> bool:
     """Return True if a previous run exists but the user hasn't chosen a run mode yet."""
     outdir_val = st.session_state.get(
         "outdir_input",
         os.path.join(os.path.expanduser("~"), "ssign_results"),
     )
-    if not outdir_val:
-        return False
-    progress_path = os.path.join(outdir_val, "ssign_progress.json")
-    if os.path.exists(progress_path):
+    if _has_previous_progress(outdir_val):
         return not bool(st.session_state.get("run_mode_choice"))
     return False
 
@@ -482,8 +491,12 @@ with tab_upload:
         st.info(
             "**Recommended:** Use GenBank (.gbff) files, which include gene names and "
             "functional annotations from tools like Bakta.\n\n"
-            "Raw FASTA contigs will use Prodigal (no additional setup) or "
-            "Bakta (richer annotation, requires database download)."
+            "Raw FASTA contigs (.fasta/.fna/.fa) will use Prodigal for gene prediction "
+            "(no additional setup) or Bakta (richer annotation, requires database download). "
+            "Protein FASTA (.faa) files are read directly.\n\n"
+            "**Note:** GFF3/GTF files are not supported in the GUI because they require "
+            "a companion FASTA file. Use GenBank format instead, or use ssign-power "
+            "(Nextflow) for GFF3 input."
         )
         bakta_available = shutil.which("bakta") is not None
         use_bakta = st.checkbox(
@@ -530,26 +543,48 @@ with tab_upload:
 
     # ── Previous run detection ──
     outdir_val = st.session_state.get("outdir_input", "")
-    progress_path = os.path.join(outdir_val, "ssign_progress.json") if outdir_val else ""
-    if progress_path and os.path.exists(progress_path):
+    if outdir_val and _has_previous_progress(outdir_val):
         try:
-            import json
-            with open(progress_path) as pf:
-                prev = json.load(pf)
-            prev_steps = prev.get("steps", [])
-            n_done = sum(1 for s in prev_steps if s.get("success"))
-            n_total = len(prev_steps)
-            prev_time = prev.get("timestamp", "unknown")
-            prev_sample = prev.get("sample_id", "unknown")
+            import json, glob as _glob
+            # Collect all per-genome progress files
+            prog_files = sorted(
+                _glob.glob(os.path.join(outdir_val, "*_progress.json"))
+            )
+            # Fall back to legacy shared file
+            if not prog_files:
+                legacy = os.path.join(outdir_val, "ssign_progress.json")
+                if os.path.exists(legacy):
+                    prog_files = [legacy]
+
+            total_done = 0
+            total_steps = 0
+            genome_summaries = []
+            latest_time = "unknown"
+            for pf_path in prog_files:
+                with open(pf_path) as pf:
+                    prev = json.load(pf)
+                prev_steps = prev.get("steps", [])
+                n_done = sum(1 for s in prev_steps if s.get("success"))
+                total_done += n_done
+                total_steps += len(prev_steps)
+                sid = prev.get("sample_id", "unknown")
+                latest_time = prev.get("timestamp", latest_time)
+                status = "complete" if n_done == len(prev_steps) else f"{n_done}/{len(prev_steps)} steps"
+                genome_summaries.append(f"- **{sid}**: {status}")
 
             st.divider()
             st.markdown("#### Previous Run Detected")
             col_info, col_action = st.columns([3, 2])
             with col_info:
+                n_genomes = len(prog_files)
+                summary = '\n'.join(genome_summaries[:10])
+                if len(genome_summaries) > 10:
+                    summary += f"\n- ...and {len(genome_summaries) - 10} more"
                 st.info(
-                    f"**Sample:** {prev_sample}  \n"
-                    f"**Progress:** {n_done}/{n_total} steps completed  \n"
-                    f"**Last run:** {prev_time}"
+                    f"**Genomes:** {n_genomes}  \n"
+                    f"**Progress:** {total_done}/{total_steps} steps completed  \n"
+                    f"**Last run:** {latest_time}\n\n"
+                    f"{summary}"
                 )
             with col_action:
                 run_mode = st.radio(
@@ -1187,7 +1222,7 @@ with tab_run:
         # Resume — use run mode from Upload tab if set, otherwise detect here
         run_mode = st.session_state.get("run_mode_choice", "")
         outdir_val = st.session_state.get("outdir_input", "")
-        progress_exists = os.path.exists(os.path.join(outdir_val, "ssign_progress.json")) if outdir_val else False
+        progress_exists = _has_previous_progress(outdir_val) if outdir_val else False
 
         if progress_exists and not run_mode:
             st.checkbox(

@@ -207,10 +207,12 @@ Merges all results into output tables and generates publication-ready summary fi
 | Format | Extensions | Notes |
 |--------|-----------|-------|
 | **GenBank** (recommended) | `.gbff`, `.gbk`, `.gb` | Includes gene annotations — no ORF prediction needed |
-| **GFF3** | `.gff`, `.gff3` | Requires associated FASTA sequence |
-| **FASTA contigs** | `.fasta`, `.fna`, `.fa` | Requires ORF prediction (Pyrodigal, or optionally Bakta) |
+| **FASTA contigs** | `.fasta`, `.fna`, `.fa` | Gene prediction via Pyrodigal (automatic) or Bakta (optional) |
+| **Protein FASTA** | `.faa` | Pre-translated proteins — read directly |
 
 GenBank format is recommended because it contains both the nucleotide sequence and gene annotations, allowing ssign to skip the ORF prediction step entirely.
+
+> **Note:** GFF3/GTF files (`.gff`, `.gff3`, `.gtf`) are not supported in the ssign GUI because they require a companion FASTA file that the browser-based uploader cannot pair. If you need GFF3 input, use **ssign-power** (Nextflow), which handles file pairing automatically. Alternatively, convert your GFF3 + FASTA to GenBank format using a tool like [Biopython](https://biopython.org/) or download the GenBank version from NCBI.
 
 ---
 

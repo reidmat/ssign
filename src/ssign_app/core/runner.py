@@ -1236,19 +1236,28 @@ class PipelineRunner:
                 ],
                 "files": self.files,
             }
-            progress_path = outdir / "ssign_progress.json"
+            # Per-genome progress file to support multi-genome resume
+            sid = self.config.sample_id
+            progress_path = outdir / f"{sid}_progress.json"
             with open(progress_path, 'w') as f:
                 json.dump(progress, f, indent=2)
         except Exception as e:
             logger.warning(f"Failed to save progress: {e}")
 
     @staticmethod
-    def load_progress(outdir):
+    def load_progress(outdir, sample_id=None):
         """Load pipeline progress from a previous run.
 
         Returns (list[StepResult], dict_files, work_dir) or (None, {}, "").
         """
-        progress_path = Path(outdir) / "ssign_progress.json"
+        # Try per-genome progress file first, fall back to legacy shared file
+        if sample_id:
+            progress_path = Path(outdir) / f"{sample_id}_progress.json"
+        else:
+            progress_path = Path(outdir) / "ssign_progress.json"
+        if not progress_path.exists():
+            # Try legacy filename
+            progress_path = Path(outdir) / "ssign_progress.json"
         if not progress_path.exists():
             return None, {}, ""
         try:
@@ -1269,7 +1278,7 @@ class PipelineRunner:
         names to skip (already completed successfully with valid outputs).
         """
         prev_results, prev_files, prev_work_dir = self.load_progress(
-            self.config.outdir
+            self.config.outdir, self.config.sample_id
         )
         if prev_results is None:
             return set()
