@@ -25,6 +25,18 @@ logger = logging.getLogger(__name__)
 
 def run_local_deeplocpro(input_fasta, deeplocpro_path, output_dir, organism="gram-"):
     """Run DeepLocPro CLI locally and return path to results file."""
+    # Handle 0-sequence input gracefully: write empty output and return
+    with open(input_fasta) as _f:
+        n_seqs = sum(1 for line in _f if line.startswith('>'))
+    if n_seqs == 0:
+        logger.info("0 sequences in input FASTA — writing empty output")
+        empty_out = os.path.join(output_dir, "deeplocpro_results.csv")
+        with open(empty_out, 'w') as f:
+            f.write("locus_tag\tpredicted_localization\textracellular_prob\t"
+                    "periplasmic_prob\touter_membrane_prob\tcytoplasmic_prob\t"
+                    "cytoplasmic_membrane_prob\tmax_localization\tmax_probability\n")
+        return empty_out
+
     # Try common entry points
     candidates = ["deeplocpro", "predict.py", "deeploc"]
     cmd_base = None
@@ -60,6 +72,18 @@ def run_remote_deeplocpro(input_fasta, output_dir):
     Uses pybiolib package: pip install pybiolib
     BioLib app: KU/DeepLocPro
     """
+    # Handle 0-sequence input gracefully: write empty output and return
+    with open(input_fasta) as _f:
+        n_seqs = sum(1 for line in _f if line.startswith('>'))
+    if n_seqs == 0:
+        logger.info("0 sequences in input FASTA — writing empty output")
+        empty_out = os.path.join(output_dir, "deeplocpro_results.csv")
+        with open(empty_out, 'w') as f:
+            f.write("locus_tag\tpredicted_localization\textracellular_prob\t"
+                    "periplasmic_prob\touter_membrane_prob\tcytoplasmic_prob\t"
+                    "cytoplasmic_membrane_prob\tmax_localization\tmax_probability\n")
+        return empty_out
+
     try:
         import biolib
     except ImportError:

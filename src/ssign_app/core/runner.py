@@ -59,6 +59,9 @@ class PipelineConfig:
     signalp_path: str = ""
     skip_signalp: bool = False
     skip_deepsece: bool = False
+    dlp_whole_genome: bool = False   # Run on all proteins, not just neighborhood
+    dse_whole_genome: bool = False
+    sp_whole_genome: bool = False
 
     # Phase 5: Annotation tools
     skip_blastp: bool = False
@@ -729,9 +732,12 @@ class PipelineRunner:
     def _step_deeplocpro(self) -> StepResult:
         output = self._wf(f"{self.config.sample_id}_deeplocpro.tsv")
 
-        # Use neighborhood proteins (focused) if available, else full proteome
-        input_proteins = self.files.get('neighborhood_proteins',
-                                         self.files.get('proteins', ''))
+        # Use neighborhood proteins (focused) unless whole-genome mode is on
+        if self.config.dlp_whole_genome:
+            input_proteins = self.files.get('proteins', '')
+        else:
+            input_proteins = self.files.get('neighborhood_proteins',
+                                             self.files.get('proteins', ''))
 
         args = [
             "--input", input_proteins,
@@ -754,9 +760,11 @@ class PipelineRunner:
     def _step_deepsece(self) -> StepResult:
         output = self._wf(f"{self.config.sample_id}_deepsece.tsv")
 
-        # Use neighborhood proteins if available
-        input_proteins = self.files.get('neighborhood_proteins',
-                                         self.files.get('proteins', ''))
+        if self.config.dse_whole_genome:
+            input_proteins = self.files.get('proteins', '')
+        else:
+            input_proteins = self.files.get('neighborhood_proteins',
+                                             self.files.get('proteins', ''))
 
         rc, stdout, stderr = run_script("run_deepsece.py", [
             "--input", input_proteins,
@@ -772,9 +780,11 @@ class PipelineRunner:
     def _step_signalp(self) -> StepResult:
         output = self._wf(f"{self.config.sample_id}_signalp.tsv")
 
-        # Use neighborhood proteins if available
-        input_proteins = self.files.get('neighborhood_proteins',
-                                         self.files.get('proteins', ''))
+        if self.config.sp_whole_genome:
+            input_proteins = self.files.get('proteins', '')
+        else:
+            input_proteins = self.files.get('neighborhood_proteins',
+                                             self.files.get('proteins', ''))
 
         args = [
             "--input", input_proteins,
@@ -800,7 +810,7 @@ class PipelineRunner:
             return StepResult("cross_validate", False, "No DeepLocPro output from previous step")
 
         dse = self.files.get('deepsece', '')
-        # DeepSecE is optional — cross_validate works with DLP alone
+        sp = self.files.get('signalp', '')
 
         valid_sys = self.files.get('valid_systems', '')
         if not valid_sys or not os.path.exists(valid_sys):
@@ -816,6 +826,8 @@ class PipelineRunner:
         ]
         if dse and os.path.exists(dse):
             args.extend(["--deepsece", dse])
+        if sp and os.path.exists(sp):
+            args.extend(["--signalp", sp])
 
         rc, stdout, stderr = run_script("cross_validate_predictions.py", args)
         if rc == 0:
@@ -1246,21 +1258,25 @@ class PipelineRunner:
         """Copy consolidated outputs to the user's output directory.
 
         Produces:
-          {sample_id}_results.csv  - Master CSV (systems on top, substrates below)
-          {sample_id}_summary.txt  - Report + enrichment stats
-          figures/                 - Publication-quality plots
+          {sample_id}_results.csv     - Normal CSV (secreted proteins, their SS, other SS)
+          {sample_id}_results_raw.csv - Raw CSV with all tool data
+          {sample_id}_summary.txt     - Report + enrichment stats
+          figures/                    - Publication-quality plots
         """
         outdir = Path(self.config.outdir)
         outdir.mkdir(parents=True, exist_ok=True)
         sid = self.config.sample_id
 
-        # 1. Master results CSV — systems + substrates in one file
+        # 1. Normal results CSV (chunked: secreted proteins → their SS → other SS)
         self._build_master_csv(outdir / f"{sid}_results.csv")
 
-        # 2. Summary — report text + enrichment summary + Fisher table
+        # 2. Raw results CSV (all columns from all tools)
+        self._build_raw_csv(outdir / f"{sid}_results_raw.csv")
+
+        # 3. Summary — report text + enrichment summary + Fisher table
         self._build_summary(outdir / f"{sid}_summary.txt")
 
-        # 3. Figures directory (per-sample subfolder for parallel safety)
+        # 4. Figures directory (per-sample subfolder for parallel safety)
         if 'figures_dir' in self.files and os.path.exists(self.files['figures_dir']):
             dest = outdir / "figures" / sid
             dest.mkdir(parents=True, exist_ok=True)
@@ -1268,17 +1284,12 @@ class PipelineRunner:
                 if fig_file.is_file():
                     shutil.copy2(fig_file, dest / fig_file.name)
 
-    def _build_master_csv(self, output_path: Path):
-        """Build a single CSV: secretion systems on top, substrates below.
-
-        Systems section: system-level rows then component rows, sorted by
-        genome → ss_type. Substrates section: annotation rows sorted by
-        genome → nearby_ss_types, with a nearby_sys_ids column linking
-        back to the system rows. A blank row separates the two sections.
-        """
+    def _load_systems(self):
+        """Load and combine system/component DataFrames, filtered by excluded."""
         import pandas as pd
 
-        # ── Systems section ──
+        excluded = set(self.config.excluded_systems or [])
+
         df_sys = None
         fpath = self.files.get('valid_systems', '')
         if fpath and os.path.exists(fpath):
@@ -1297,18 +1308,66 @@ class PipelineRunner:
             except Exception:
                 pass
 
-        # Build sys_id lookup: ss_type → list of sys_ids (for substrate linkage)
-        sys_id_by_type: dict[str, list[str]] = {}
-        if df_comp is not None and 'ss_type' in df_comp.columns and 'sys_id' in df_comp.columns:
-            for ss_type, group in df_comp.groupby('ss_type'):
-                sys_id_by_type[ss_type] = sorted(group['sys_id'].unique().tolist())
+        # Combine
+        frames = [df for df in [df_sys, df_comp] if df is not None]
+        if not frames:
+            return pd.DataFrame()
 
-        # Combine and sort systems: by sample_id, ss_type, then record_type
-        # (system rows before component rows for each SS type)
+        df = pd.concat(frames, ignore_index=True)
+
+        # Sort: sample_id → ss_type → record_type (system before component)
+        type_order = {'system': 0, 'component': 1}
+        df['_sort'] = df['record_type'].map(type_order)
+        sort_cols = []
+        if 'sample_id' in df.columns:
+            sort_cols.append('sample_id')
+        if 'ss_type' in df.columns:
+            sort_cols.append('ss_type')
+        sort_cols.append('_sort')
+        df = df.sort_values(sort_cols).drop(columns=['_sort'])
+
+        return df, excluded
+
+    def _build_master_csv(self, output_path: Path):
+        """Build the normal results CSV with three chunks:
+
+        1. Secreted proteins (full annotation columns from integrated CSV)
+        2. Secretion systems that have associated secreted proteins
+        3. Remaining (non-excluded) secretion systems
+
+        Excluded systems and their associated proteins are omitted.
+        Blank rows separate the three chunks.
+        """
+        import pandas as pd
+
+        excluded = set(self.config.excluded_systems or [])
+
+        # ── Load systems ──
+        df_sys = None
+        fpath = self.files.get('valid_systems', '')
+        if fpath and os.path.exists(fpath):
+            try:
+                df_sys = pd.read_csv(fpath, sep='\t')
+                df_sys.insert(0, 'record_type', 'system')
+            except Exception:
+                pass
+
+        df_comp = None
+        fpath = self.files.get('ss_components', '')
+        if fpath and os.path.exists(fpath):
+            try:
+                df_comp = pd.read_csv(fpath, sep='\t')
+                df_comp.insert(0, 'record_type', 'component')
+            except Exception:
+                pass
+
+        # Combine and filter out excluded
         sys_frames = [df for df in [df_sys, df_comp] if df is not None]
-        df_systems = None
+        df_systems = pd.DataFrame()
         if sys_frames:
             df_systems = pd.concat(sys_frames, ignore_index=True)
+            if 'ss_type' in df_systems.columns and excluded:
+                df_systems = df_systems[~df_systems['ss_type'].isin(excluded)]
             type_order = {'system': 0, 'component': 1}
             df_systems['_sort'] = df_systems['record_type'].map(type_order)
             sort_cols = []
@@ -1319,8 +1378,8 @@ class PipelineRunner:
             sort_cols.append('_sort')
             df_systems = df_systems.sort_values(sort_cols).drop(columns=['_sort'])
 
-        # ── Substrates section ──
-        df_subs = None
+        # ── Load secreted proteins (integrated annotations) ──
+        df_subs = pd.DataFrame()
         fpath = self.files.get('integrated', '')
         if fpath and os.path.exists(fpath):
             try:
@@ -1328,25 +1387,18 @@ class PipelineRunner:
             except Exception:
                 pass
 
-        if df_subs is not None and sys_id_by_type:
-            # Add nearby_sys_ids column: map each nearby_ss_type to its sys_ids
-            def _resolve_sys_ids(nearby_types):
-                if pd.isna(nearby_types) or not nearby_types:
-                    return ''
-                ids = []
-                for t in str(nearby_types).split(','):
-                    t = t.strip()
-                    ids.extend(sys_id_by_type.get(t, []))
-                return ', '.join(sorted(set(ids)))
+        # Filter proteins from excluded systems
+        if not df_subs.empty and 'nearby_ss_types' in df_subs.columns and excluded:
+            def _has_non_excluded_ss(val):
+                if pd.isna(val) or not val:
+                    return False
+                types = {t.strip() for t in str(val).split(',')}
+                return bool(types - excluded)
+            df_subs = df_subs[df_subs['nearby_ss_types'].apply(_has_non_excluded_ss)]
 
-            if 'nearby_ss_types' in df_subs.columns:
-                # Insert nearby_sys_ids right after nearby_ss_types
-                idx = df_subs.columns.get_loc('nearby_ss_types') + 1
-                df_subs.insert(idx, 'nearby_sys_ids',
-                               df_subs['nearby_ss_types'].apply(_resolve_sys_ids))
-
-            # Sort by genome, then SS type
-            sort_cols = []
+        # Sort secreted proteins
+        sort_cols = []
+        if not df_subs.empty:
             if 'sample_id' in df_subs.columns:
                 sort_cols.append('sample_id')
             if 'nearby_ss_types' in df_subs.columns:
@@ -1354,17 +1406,99 @@ class PipelineRunner:
             if sort_cols:
                 df_subs = df_subs.sort_values(sort_cols)
 
-        # ── Write combined CSV ──
-        with open(output_path, 'w', newline='') as f:
-            wrote_something = False
-            if df_systems is not None and not df_systems.empty:
-                df_systems.to_csv(f, index=False)
-                wrote_something = True
+        # ── Organize columns like reference CSV ──
+        # Priority column order (present columns are moved to front)
+        priority_cols = [
+            'locus_tag', 'sample_id', 'product', 'gbff_annotation',
+            'broad_consensus_annotation', 'broad_annotation',
+            'detailed_annotation', 'detailed_consensus_annotation',
+            'evidence_keywords', 'n_tools_agreeing', 'n_tools_with_hits',
+            'concordance_ratio', 'confidence_tier',
+            'aa_length', 'gravy', 'mw_da', 'isoelectric_point',
+            'charge_ph7', 'instability_index', 'aromaticity',
+            'nearby_ss_types',
+            'predicted_localization', 'is_extracellular',
+            'dlp_extracellular_prob', 'dlp_max_localization', 'dlp_max_probability',
+            'dse_ss_type', 'dse_max_prob',
+            'signalp_prediction', 'signalp_probability', 'signalp_cs_position',
+        ]
+        if not df_subs.empty:
+            existing_priority = [c for c in priority_cols if c in df_subs.columns]
+            remaining = [c for c in df_subs.columns if c not in existing_priority
+                         and c != 'sequence']
+            # Put sequence at the end
+            col_order = existing_priority + sorted(remaining)
+            if 'sequence' in df_subs.columns:
+                col_order.append('sequence')
+            df_subs = df_subs[col_order]
 
-            if df_subs is not None and not df_subs.empty:
-                if wrote_something:
-                    f.write('\n')  # blank separator row
+        # ── Determine which SS have associated secreted proteins ──
+        ss_types_with_subs = set()
+        if not df_subs.empty and 'nearby_ss_types' in df_subs.columns:
+            for val in df_subs['nearby_ss_types'].dropna():
+                for t in str(val).split(','):
+                    ss_types_with_subs.add(t.strip())
+
+        df_systems_with_subs = pd.DataFrame()
+        df_systems_other = pd.DataFrame()
+        if not df_systems.empty and 'ss_type' in df_systems.columns:
+            mask = df_systems['ss_type'].isin(ss_types_with_subs)
+            df_systems_with_subs = df_systems[mask]
+            df_systems_other = df_systems[~mask]
+
+        # ── Write chunked CSV ──
+        with open(output_path, 'w', newline='') as f:
+            chunk_written = False
+
+            # Chunk 1: Secreted proteins
+            if not df_subs.empty:
+                f.write('# Secreted Proteins\n')
                 df_subs.to_csv(f, index=False)
+                chunk_written = True
+
+            # Chunk 2: SS with associated secreted proteins
+            if not df_systems_with_subs.empty:
+                if chunk_written:
+                    f.write('\n')
+                f.write('# Secretion Systems (with secreted proteins)\n')
+                df_systems_with_subs.to_csv(f, index=False)
+                chunk_written = True
+
+            # Chunk 3: Other non-excluded SS
+            if not df_systems_other.empty:
+                if chunk_written:
+                    f.write('\n')
+                f.write('# Secretion Systems (other)\n')
+                df_systems_other.to_csv(f, index=False)
+
+    def _build_raw_csv(self, output_path: Path):
+        """Build raw CSV with ALL data from ALL tools — no filtering, no column pruning."""
+        import pandas as pd
+
+        # Start with integrated annotations (richest data)
+        df = pd.DataFrame()
+        fpath = self.files.get('integrated', '')
+        if fpath and os.path.exists(fpath):
+            try:
+                df = pd.read_csv(fpath)
+            except Exception:
+                pass
+
+        if df.empty:
+            # Fallback: just copy substrates if no integrated CSV
+            fpath = self.files.get('substrates_filtered', self.files.get('substrates', ''))
+            if fpath and os.path.exists(fpath):
+                try:
+                    df = pd.read_csv(fpath, sep='\t')
+                except Exception:
+                    pass
+
+        if not df.empty:
+            df.to_csv(output_path, index=False)
+        else:
+            # Write empty file with minimal header
+            with open(output_path, 'w') as f:
+                f.write('locus_tag,sample_id\n')
 
     def _build_summary(self, output_path: Path):
         """Combine report text, enrichment summary, and Fisher results."""

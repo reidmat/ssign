@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Extract protein sequences and gene info from GenBank or GFF3 files.
+"""Extract protein sequences and gene info from genome files.
 
 Supports:
   - GenBank/GBFF files (Bakta, NCBI, Prokka output)
   - GFF3 + FASTA pairs
+  - FASTA contigs (.fasta, .fna, .fa) via Pyrodigal gene prediction
 
 Produces:
   - proteins.faa: FASTA of all CDS translations
@@ -147,6 +148,58 @@ def extract_from_gff3(gff_path: str, fasta_path: str, sample_id: str):
             }
 
 
+def extract_from_fasta_contigs(fasta_path: str, sample_id: str):
+    """Predict proteins from raw nucleotide contigs using Pyrodigal.
+
+    Accepts .fasta, .fna, .fa files containing genomic DNA sequences.
+    Uses Pyrodigal (Python bindings for Prodigal) for gene prediction.
+    """
+    import pyrodigal
+
+    # Load contigs
+    contigs = []
+    for record in SeqIO.parse(fasta_path, "fasta"):
+        contigs.append((record.id, str(record.seq)))
+
+    if not contigs:
+        logger.warning("No contigs found in FASTA file")
+        return
+
+    # Train Pyrodigal on input sequences
+    orf_finder = pyrodigal.GeneFinder(meta=len(contigs) > 1 or
+                                       sum(len(s) for _, s in contigs) < 100_000)
+
+    if not orf_finder.meta:
+        # Single-genome mode: train on concatenated sequences
+        training_seq = ''.join(seq for _, seq in contigs)
+        orf_finder.train(training_seq.encode())
+
+    gene_counter = 0
+    for contig_id, contig_seq in contigs:
+        genes = orf_finder.find_genes(contig_seq.encode())
+        for gene in genes:
+            gene_counter += 1
+            locus_tag = f"{sample_id}_{gene_counter:05d}"
+            translation = gene.translate()
+            # Remove trailing stop codon asterisk if present
+            if translation and translation[-1] == '*':
+                translation = translation[:-1]
+            if not translation:
+                continue
+
+            yield {
+                "locus_tag": locus_tag,
+                "protein_id": "",
+                "gene": "",
+                "product": "hypothetical protein",
+                "contig": contig_id,
+                "start": gene.begin - 1,  # pyrodigal is 1-based
+                "end": gene.end,
+                "strand": "+" if gene.strand == 1 else "-",
+                "sequence": translation,
+            }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract proteins from genome annotation")
     parser.add_argument("--input", required=True, help="GenBank/GBFF or GFF3 file")
@@ -170,6 +223,27 @@ def main():
             logger.error("GFF3 input requires --fasta argument")
             sys.exit(1)
         entries = list(extract_from_gff3(args.input, args.fasta, args.sample))
+    elif ext in ('.fasta', '.fna', '.fa'):
+        logger.info(f"FASTA contigs detected — running Pyrodigal gene prediction")
+        entries = list(extract_from_fasta_contigs(args.input, args.sample))
+    elif ext == '.faa':
+        # Pre-translated protein FASTA — read directly
+        entries = []
+        counter = 0
+        for record in SeqIO.parse(args.input, "fasta"):
+            counter += 1
+            locus_tag = record.id or f"{args.sample}_{counter:05d}"
+            entries.append({
+                "locus_tag": locus_tag,
+                "protein_id": "",
+                "gene": "",
+                "product": record.description if record.description != record.id else "hypothetical protein",
+                "contig": "",
+                "start": 0,
+                "end": len(record.seq),
+                "strand": "+",
+                "sequence": str(record.seq),
+            })
     else:
         logger.error(f"Unsupported format: {ext}")
         sys.exit(1)

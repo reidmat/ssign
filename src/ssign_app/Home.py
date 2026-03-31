@@ -102,61 +102,97 @@ _GATE_MSG = (
 def _merge_genome_outputs(outdir: str, sample_names: list[str]):
     """Merge per-genome output files into single combined files.
 
-    After each genome's PipelineRunner produces {sample_id}_results.csv,
-    {sample_id}_summary.txt, and figures/{sample_id}/, this function
-    combines them into ssign_results.csv, ssign_summary.txt, and a flat
-    figures/ directory.
+    Produces:
+      ssign_results.csv     — Normal (chunked: secreted proteins, their SS, other SS)
+      ssign_results_raw.csv — Raw (all tool data, no filtering)
+      ssign_summary.txt     — Combined summary
+      figures/              — Combined figures
     """
     import pandas as pd
-    import io as _io
 
-    # ── 1. Merge results CSVs ──
-    all_systems = []
-    all_subs = []
+    # ── 1. Merge normal results CSVs (chunked format) ──
+    # The per-genome CSVs have comment-header chunks separated by blank lines
+    all_chunks = {'proteins': [], 'ss_with': [], 'ss_other': []}
     for sid in sample_names:
         csv_path = os.path.join(outdir, f"{sid}_results.csv")
         if not os.path.exists(csv_path):
             continue
+
         with open(csv_path) as f:
-            lines = f.readlines()
+            content = f.read()
 
-        # Split at blank separator row (systems above, secreted proteins below)
-        sep_idx = None
-        for i, line in enumerate(lines):
-            if line.strip() == '':
-                sep_idx = i
-                break
-
-        if sep_idx is not None:
-            sys_block = ''.join(lines[:sep_idx])
-            sub_block = ''.join(lines[sep_idx + 1:])
-        else:
-            sys_block = ''
-            sub_block = ''.join(lines)
-
-        if sys_block.strip():
-            try:
-                all_systems.append(pd.read_csv(_io.StringIO(sys_block)))
-            except Exception:
-                pass
-        if sub_block.strip():
-            try:
-                all_subs.append(pd.read_csv(_io.StringIO(sub_block)))
-            except Exception:
-                pass
+        # Parse chunks by comment headers
+        current_chunk = None
+        current_lines = []
+        for line in content.split('\n'):
+            if line.startswith('# Secreted Proteins'):
+                if current_chunk and current_lines:
+                    all_chunks[current_chunk].append('\n'.join(current_lines))
+                current_chunk = 'proteins'
+                current_lines = []
+            elif line.startswith('# Secretion Systems (with'):
+                if current_chunk and current_lines:
+                    all_chunks[current_chunk].append('\n'.join(current_lines))
+                current_chunk = 'ss_with'
+                current_lines = []
+            elif line.startswith('# Secretion Systems (other'):
+                if current_chunk and current_lines:
+                    all_chunks[current_chunk].append('\n'.join(current_lines))
+                current_chunk = 'ss_other'
+                current_lines = []
+            elif line.strip():
+                current_lines.append(line)
+        if current_chunk and current_lines:
+            all_chunks[current_chunk].append('\n'.join(current_lines))
 
         os.remove(csv_path)
 
+    # Concatenate each chunk type across genomes
+    import io as _io
+    merged = {}
+    for key, blocks in all_chunks.items():
+        dfs = []
+        for block in blocks:
+            if block.strip():
+                try:
+                    dfs.append(pd.read_csv(_io.StringIO(block)))
+                except Exception:
+                    pass
+        if dfs:
+            merged[key] = pd.concat(dfs, ignore_index=True)
+
     combined_csv = os.path.join(outdir, "ssign_results.csv")
     with open(combined_csv, 'w', newline='') as f:
-        wrote = False
-        if all_systems:
-            pd.concat(all_systems, ignore_index=True).to_csv(f, index=False)
-            wrote = True
-        if all_subs:
-            if wrote:
+        written = False
+        if 'proteins' in merged and not merged['proteins'].empty:
+            f.write('# Secreted Proteins\n')
+            merged['proteins'].to_csv(f, index=False)
+            written = True
+        if 'ss_with' in merged and not merged['ss_with'].empty:
+            if written:
                 f.write('\n')
-            pd.concat(all_subs, ignore_index=True).to_csv(f, index=False)
+            f.write('# Secretion Systems (with secreted proteins)\n')
+            merged['ss_with'].to_csv(f, index=False)
+            written = True
+        if 'ss_other' in merged and not merged['ss_other'].empty:
+            if written:
+                f.write('\n')
+            f.write('# Secretion Systems (other)\n')
+            merged['ss_other'].to_csv(f, index=False)
+
+    # ── 2. Merge raw results CSVs ──
+    raw_dfs = []
+    for sid in sample_names:
+        raw_path = os.path.join(outdir, f"{sid}_results_raw.csv")
+        if os.path.exists(raw_path):
+            try:
+                raw_dfs.append(pd.read_csv(raw_path))
+            except Exception:
+                pass
+            os.remove(raw_path)
+    if raw_dfs:
+        pd.concat(raw_dfs, ignore_index=True).to_csv(
+            os.path.join(outdir, "ssign_results_raw.csv"), index=False)
 
     # ── 2. Merge summary texts ──
     summary_parts = []
@@ -184,40 +220,16 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
     if os.path.isdir(fig_base):
         shutil.rmtree(fig_base)
 
-    # Extract the substrates section from the merged CSV and re-run
-    # the figure generator once on the combined data
-    combined_csv = os.path.join(outdir, "ssign_results.csv")
-    if os.path.exists(combined_csv):
+    # Use the raw CSV (clean tabular data, no comment headers) for figure generation
+    raw_csv = os.path.join(outdir, "ssign_results_raw.csv")
+    if os.path.exists(raw_csv):
         try:
-            import io as _io
-            with open(combined_csv) as f:
-                lines = f.readlines()
-
-            # Substrates are after the blank separator line
-            sub_block = None
-            for i, line in enumerate(lines):
-                if line.strip() == '':
-                    sub_block = ''.join(lines[i + 1:])
-                    break
-            if sub_block is None:
-                sub_block = ''.join(lines)  # no separator = all substrates
-
-            if sub_block.strip():
-                # Write to temp file for figure generator
-                import tempfile
-                tmp = tempfile.NamedTemporaryFile(
-                    mode='w', suffix='_combined.csv', delete=False,
-                )
-                tmp.write(sub_block)
-                tmp.close()
-
-                from ssign_app.core.runner import run_script
-                run_script("generate_figures.py", [
-                    "--master-csvs", tmp.name,
-                    "--outdir", os.path.join(outdir, "figures"),
-                    "--dpi", "300",
-                ])
-                os.unlink(tmp.name)
+            from ssign_app.core.runner import run_script
+            run_script("generate_figures.py", [
+                "--master-csvs", raw_csv,
+                "--outdir", os.path.join(outdir, "figures"),
+                "--dpi", "300",
+            ])
         except Exception:
             pass
 
@@ -654,6 +666,39 @@ with tab_pipeline:
                     help="Fraction of secretion system components that must have correct "
                          "predicted localization for the system to be considered valid.",
                     key="frac",
+                )
+
+        # ── Whole-genome prediction option ──
+        with st.expander("Advanced: Run predictions on entire proteome", expanded=False):
+            st.warning(
+                "By default, predictions run only on proteins near detected secretion "
+                "systems (typically 50-200 proteins per genome). Enabling whole-genome "
+                "mode runs predictions on **all proteins** in the genome (typically "
+                "3,000-6,000 proteins), which will **significantly increase runtime** "
+                "(10-50x longer for cloud APIs). Only enable if you need proteome-wide "
+                "predictions for downstream analysis."
+            )
+            wg1, wg2, wg3 = st.columns(3)
+            with wg1:
+                st.checkbox(
+                    "DeepLocPro (whole genome)",
+                    value=False, key="dlp_whole_genome",
+                    help="Run DeepLocPro on all proteins, not just those near "
+                         "secretion systems. Significantly increases runtime.",
+                )
+            with wg2:
+                st.checkbox(
+                    "DeepSecE (whole genome)",
+                    value=False, key="dse_whole_genome",
+                    help="Run DeepSecE on all proteins, not just those near "
+                         "secretion systems. Significantly increases runtime.",
+                )
+            with wg3:
+                st.checkbox(
+                    "SignalP (whole genome)",
+                    value=False, key="sp_whole_genome",
+                    help="Run SignalP on all proteins, not just those near "
+                         "secretion systems. Significantly increases runtime.",
                 )
 
         st.markdown("---")
@@ -1242,6 +1287,9 @@ with tab_run:
                     skip_signalp=not st.session_state.get("run_signalp", False),
                     signalp_mode="local" if "Local" in st.session_state.get("sp_mode", "") else "remote",
                     signalp_path=st.session_state.get("sp_path", ""),
+                    dlp_whole_genome=st.session_state.get("dlp_whole_genome", False),
+                    dse_whole_genome=st.session_state.get("dse_whole_genome", False),
+                    sp_whole_genome=st.session_state.get("sp_whole_genome", False),
                     skip_blastp=not st.session_state.get("run_blastp", True),
                     blastp_mode="remote",
                     blastp_db="",
@@ -1389,13 +1437,20 @@ with tab_run:
                         try:
                             with open(results_csv) as _f:
                                 lines = _f.readlines()
-                            for idx, line in enumerate(lines):
-                                if line.strip() == '':
-                                    sub_lines = [l for l in lines[idx+2:] if l.strip()]
-                                    n_secreted = str(len(sub_lines))
-                                    break
-                            else:
-                                n_secreted = str(max(0, len(lines) - 1))
+                            # Count data rows in the Secreted Proteins chunk
+                            in_proteins = False
+                            count = 0
+                            for line in lines:
+                                if '# Secreted Proteins' in line:
+                                    in_proteins = True
+                                    continue
+                                if line.startswith('#') or (not line.strip() and in_proteins):
+                                    if in_proteins:
+                                        break
+                                    continue
+                                if in_proteins and line.strip() and not line.startswith('locus_tag'):
+                                    count += 1
+                            n_secreted = str(count) if count > 0 else "\u2014"
                         except Exception:
                             pass
                 st.metric("Secreted proteins found", n_secreted)

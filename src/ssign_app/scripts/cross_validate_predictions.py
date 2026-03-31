@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
-"""Cross-validate DeepLocPro and DeepSecE predictions.
+"""Cross-validate DeepLocPro, DeepSecE, and SignalP predictions.
 
 Merges prediction outputs and flags unreliable predictions:
 - DeepSecE T3SS predictions without MacSyFinder T3SS support
   (MacSyFinder found 0 T3SS across all 74 genomes; DeepSecE predicts
   1808 T3SS — mostly hypothetical proteins and flagellar misclassification)
+
+The 'is_secreted' determination uses all available prediction tools:
+- DeepLocPro: extracellular probability >= threshold
+- DeepSecE: predicted as secreted (non 'Non-secreted')
+- SignalP: signal peptide detected (not 'OTHER')
+
+The 'secretion_evidence' column records which tools predict secretion.
 """
 
 import argparse
@@ -20,6 +27,7 @@ def main():
     parser = argparse.ArgumentParser(description="Cross-validate predictions")
     parser.add_argument("--deeplocpro", required=True)
     parser.add_argument("--deepsece", default="")
+    parser.add_argument("--signalp", default="")
     parser.add_argument("--valid-systems", required=True)
     parser.add_argument("--sample", required=True)
     parser.add_argument("--conf-threshold", type=float, default=0.8)
@@ -50,8 +58,18 @@ def main():
     else:
         logger.info("DeepSecE not available — running with DeepLocPro only")
 
+    # Load SignalP predictions (optional)
+    sp_data = {}
+    if args.signalp and os.path.exists(args.signalp):
+        with open(args.signalp) as f:
+            for row in csv.DictReader(f, delimiter='\t'):
+                sp_data[row['locus_tag']] = row
+        logger.info(f"SignalP: loaded {len(sp_data)} predictions")
+    else:
+        logger.info("SignalP not available")
+
     # Merge and cross-validate
-    all_loci = sorted(set(dlp_data.keys()) | set(dse_data.keys()))
+    all_loci = sorted(set(dlp_data.keys()) | set(dse_data.keys()) | set(sp_data.keys()))
 
     fieldnames = [
         'locus_tag', 'sample_id',
@@ -60,8 +78,10 @@ def main():
         'periplasmic_prob', 'outer_membrane_prob', 'cytoplasmic_prob',
         # DeepSecE
         'dse_ss_type', 'dse_max_prob', 'dse_T3SS_flagged',
-        # Agreement
-        'is_extracellular', 'product',
+        # SignalP
+        'signalp_prediction', 'signalp_probability',
+        # Secretion determination
+        'is_secreted', 'secretion_evidence', 'product',
     ]
 
     n_flagged_t3ss = 0
@@ -72,6 +92,7 @@ def main():
         for locus in all_loci:
             dlp = dlp_data.get(locus, {})
             dse = dse_data.get(locus, {})
+            sp = sp_data.get(locus, {})
 
             try:
                 ext_prob = float(dlp.get('extracellular_prob', 0))
@@ -84,10 +105,33 @@ def main():
             except (ValueError, TypeError):
                 dse_max = 0.0
 
+            sp_pred = sp.get('signalp_prediction', 'OTHER')
+            try:
+                sp_prob = float(sp.get('signalp_probability', 0))
+            except (ValueError, TypeError):
+                sp_prob = 0.0
+
             # Flag DeepSecE T3SS predictions without MacSyFinder support
             t3ss_flagged = (dse_type == 'T3SS' and not has_t3ss)
             if t3ss_flagged:
                 n_flagged_t3ss += 1
+
+            # Secretion determination: any tool predicts secretion
+            evidence = []
+            dlp_secreted = ext_prob >= args.conf_threshold
+            if dlp_secreted:
+                evidence.append('DeepLocPro')
+
+            dse_secreted = (dse_type not in ('Non-secreted', '', 'OTHER')
+                            and not t3ss_flagged and dse_max > 0)
+            if dse_secreted:
+                evidence.append('DeepSecE')
+
+            sp_secreted = sp_pred not in ('OTHER', '', 'No signal peptide')
+            if sp_secreted:
+                evidence.append('SignalP')
+
+            is_secreted = bool(evidence)
 
             writer.writerow({
                 'locus_tag': locus,
@@ -100,7 +144,10 @@ def main():
                 'dse_ss_type': dse_type,
                 'dse_max_prob': dse_max,
                 'dse_T3SS_flagged': t3ss_flagged,
-                'is_extracellular': ext_prob >= args.conf_threshold,
+                'signalp_prediction': sp_pred,
+                'signalp_probability': sp_prob,
+                'is_secreted': is_secreted,
+                'secretion_evidence': ','.join(evidence) if evidence else '',
                 'product': dlp.get('product', dse.get('product', '')),
             })
 

@@ -34,6 +34,16 @@ DTU_POLL_INTERVAL = 5
 
 def run_local_signalp(input_fasta, signalp_path, output_dir):
     """Run SignalP 6.0 CLI locally."""
+    # Handle 0-sequence input gracefully: write empty output and return
+    with open(input_fasta) as _f:
+        n_seqs = sum(1 for line in _f if line.startswith('>'))
+    if n_seqs == 0:
+        logger.info("0 sequences in input FASTA — writing empty output")
+        empty_out = os.path.join(output_dir, "signalp_results.tsv")
+        with open(empty_out, 'w') as f:
+            f.write("locus_tag\tsignalp_prediction\tsignalp_probability\tsignalp_cs_position\n")
+        return empty_out
+
     signalp_bin = os.path.join(signalp_path, "signalp6") if signalp_path else "signalp6"
 
     cmd = [
@@ -87,6 +97,15 @@ def run_remote_signalp(input_fasta, output_dir):
         fasta_content = f.read()
 
     n_seqs = sum(1 for line in fasta_content.decode().split('\n') if line.startswith('>'))
+
+    # Handle 0-sequence input gracefully: write empty output and return
+    if n_seqs == 0:
+        logger.info("0 sequences in input FASTA — writing empty output")
+        empty_out = os.path.join(output_dir, "signalp_results.tsv")
+        with open(empty_out, 'w') as f:
+            f.write("locus_tag\tsignalp_prediction\tsignalp_probability\tsignalp_cs_position\n")
+        return empty_out
+
     logger.info(f"Submitting {n_seqs} sequences to DTU SignalP (max 5000)")
 
     if n_seqs > 5000:

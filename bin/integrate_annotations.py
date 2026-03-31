@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """Integrate all annotation sources into master CSV.
 
-Left-join merges on locus_tag. Includes 7-tool unweighted consensus voting
-(BLASTp, Foldseek, InterProScan, HHpred Pfam, HHpred PDB, pLM-BLAST, GBFF).
-DPFunc is EXCLUDED.
+Left-join merges on locus_tag, then computes annotation consensus
+across tools: BLASTp, Foldseek, InterProScan, HHpred (Pfam), HHpred (PDB),
+pLM-BLAST, GBFF (original genome annotation), and SignalP.
 
-Adapted from:
-- pipeline/scripts/integrate_annotations.py (merge + GO categorization)
-- build_combined_annotations.py (multi-source merge)
-- analyze_substrate_annotations.py (consensus voting + ProtParam)
+Consensus voting counts how many tools provided a hit for each protein
+(n_tools_with_hits) — GBFF annotations are included as a tool.
 """
 
 import argparse
 import csv
-import glob
 import logging
 import os
 
@@ -21,6 +18,44 @@ import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
+
+# Columns to check for annotation hits per tool
+TOOL_HIT_COLUMNS = {
+    'BLASTp': 'blastp_hit_description',
+    'HHpred_Pfam': 'pfam_top1_description',
+    'HHpred_PDB': 'pdb_top1_description',
+    'InterProScan': 'interpro_domains',
+    'Foldseek': 'foldseek_hit_description',
+    'pLM-BLAST': 'ecod70_top1_description',
+    'GBFF': 'product',
+    'SignalP': 'signalp_prediction',
+}
+
+
+def _compute_tool_counts(df):
+    """Add n_tools_with_hits and tool_hits_list columns."""
+    def _count_hits(row):
+        hits = []
+        for tool, col in TOOL_HIT_COLUMNS.items():
+            if col not in df.columns:
+                continue
+            val = row.get(col, '')
+            if pd.isna(val) or not str(val).strip():
+                continue
+            # For GBFF, skip generic annotations
+            if tool == 'GBFF' and str(val).strip().lower() in (
+                'hypothetical protein', 'uncharacterized protein', ''):
+                continue
+            # For SignalP, only count if a signal peptide was found
+            if tool == 'SignalP' and str(val).strip().upper() in ('OTHER', ''):
+                continue
+            hits.append(tool)
+        return hits
+
+    hit_lists = df.apply(_count_hits, axis=1)
+    df['n_tools_with_hits'] = hit_lists.apply(len)
+    df['annotation_tools'] = hit_lists.apply(lambda x: ','.join(x) if x else '')
+    return df
 
 
 def main():
@@ -70,6 +105,9 @@ def main():
 
         except Exception as e:
             logger.warning(f"Failed to merge {ann_file}: {e}")
+
+    # Compute tool hit counts (including GBFF)
+    df = _compute_tool_counts(df)
 
     # Write output
     df.to_csv(args.output, index=False)
