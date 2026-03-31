@@ -10,7 +10,6 @@ from pathlib import Path
 import shutil
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from ssign_app.core.runner import PipelineConfig, PipelineRunner, StepResult
 
@@ -53,25 +52,31 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Custom connection error — replace Streamlit's generic message with ssign-specific one
-components.html('''
+# Uses st.markdown (not components.html) so the script runs in the main page context
+# rather than an iframe, which can't access the parent DOM.
+st.markdown('''
 <script>
-const observer = new MutationObserver(function() {
-    document.querySelectorAll('span, p, div, pre').forEach(function(el) {
-        if (!el.children.length && el.textContent) {
-            if (el.textContent.includes('Is Streamlit still running')) {
-                el.textContent = 'ssign server stopped. To restart, run: ssign';
+(function() {
+    const observer = new MutationObserver(function() {
+        const walker = document.createTreeWalker(
+            document.body, NodeFilter.SHOW_TEXT, null, false
+        );
+        while (walker.nextNode()) {
+            const node = walker.currentNode;
+            if (node.textContent.includes('Is Streamlit still running')) {
+                node.textContent = 'ssign server stopped. To restart, run: ssign';
             }
-            if (el.textContent.includes('streamlit run')) {
-                el.textContent = el.textContent.replace(
+            if (node.textContent.includes('streamlit run')) {
+                node.textContent = node.textContent.replace(
                     /streamlit run \\S+/g, 'ssign'
                 );
             }
         }
     });
-});
-observer.observe(document.body, {childList: true, subtree: true, characterData: true});
+    observer.observe(document.body, {childList: true, subtree: true, characterData: true});
+})();
 </script>
-''', height=0)
+''', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────
 # Session state defaults
@@ -302,7 +307,7 @@ with st.sidebar:
     st.caption(
         "Many secreted proteins in lesser-studied organisms are classified as "
         "hypothetical or domain of unknown function (DUF). A suite of optional "
-        "annotation tools (BLASTp, HHpred, InterProScan, Foldseek, ProtParam) "
+        "annotation tools (BLASTp, HHpred, InterProScan, ProtParam) "
         "can help resolve some of these."
     )
 
@@ -1036,51 +1041,33 @@ with tab_pipeline:
 
         st.divider()
 
-        st.markdown("**Advanced / Large Database Tools**")
-        st.caption("These require significant local storage or are experimental.")
+        st.markdown("**ssign-power only**")
+        st.caption(
+            "The following tools require local databases or 3D protein structures "
+            "and are only available in **ssign-power** (Nextflow + Docker). "
+            "They are not available in the cloud-based ssign GUI."
+        )
 
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
-            run_foldseek = st.checkbox(
-                "Foldseek", value=False, key="run_fs",
-                help="Searches for structurally similar proteins using predicted or "
-                     "experimental 3D structures. Can find functional relationships "
-                     "that sequence-based methods miss.",
-            )
+            st.checkbox("Foldseek", value=False, key="run_fs",
+                         disabled=True)
         with col_info:
-            if run_foldseek:
-                fs_mode = st.radio("Foldseek mode", ["Web API", "Local"], key="fs_mode",
-                                    help="Web API: uses the Foldseek server (requires "
-                                         "AlphaFold DB structures). Local: requires "
-                                         "Foldseek database download (~10 GB).")
-                if fs_mode == "Local":
-                    st.text_input("Foldseek DB path", key="fs_db",
-                                  help="Path to Foldseek database (~10 GB).")
-                else:
-                    st.caption("Foldseek web API | Requires AlphaFold DB structures")
-                fc1, fc2 = st.columns(2)
-                with fc1:
-                    st.number_input("E-value threshold", value=1e-3,
-                                    format="%.0e", key="fs_evalue",
-                                    help="Maximum e-value for Foldseek hits.")
-                with fc2:
-                    st.slider("Min. TM-score", 0.0, 1.0, 0.5, 0.05,
-                              key="fs_tmscore",
-                              help="Minimum query-normalized TM-score to keep a "
-                                   "structural hit.")
+            st.caption(
+                "Structural homology search. Requires pre-computed 3D structures "
+                "(e.g. from AlphaFold DB or ESMFold) and a local Foldseek database "
+                "(~10 GB). Available in ssign-power."
+            )
 
-        # ── pLM-BLAST ──
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
             st.checkbox("pLM-BLAST (ECOD70)", value=False, key="run_plm",
-                         disabled=True,
-                         help="Protein language model-based structural homology "
-                              "detection against the ECOD70 database.")
+                         disabled=True)
         with col_info:
             st.caption(
-                "Local only — MPI web API currently unavailable. "
-                "Requires local pLM-BLAST installation + ECOD70 database (~10 GB). "
-                "Not yet integrated into ssign pipeline."
+                "Protein language model-based remote homology detection. Requires "
+                "local pLM-BLAST installation (GitHub only, not pip-installable) + "
+                "ECOD70 database (~10 GB). Available in ssign-power."
             )
 
         st.divider()
