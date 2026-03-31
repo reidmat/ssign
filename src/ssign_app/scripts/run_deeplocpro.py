@@ -121,7 +121,24 @@ def _split_fasta_bytes(fasta_content, batch_size):
     return batches
 
 
-def _submit_and_poll_dtu(fasta_bytes, batch_num, total_batches):
+def _submit_and_poll_dtu(fasta_bytes, batch_num, total_batches, max_retries=3):
+    """Submit one batch to DTU and poll for results, with retry on failure."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            return _submit_and_poll_dtu_once(fasta_bytes, batch_num, total_batches)
+        except RuntimeError as e:
+            if attempt < max_retries:
+                wait = 30 * attempt  # 30s, 60s, 90s
+                logger.warning(
+                    f"Batch {batch_num}/{total_batches} attempt {attempt}/{max_retries} "
+                    f"failed: {e}. Retrying in {wait}s..."
+                )
+                time.sleep(wait)
+            else:
+                raise
+
+
+def _submit_and_poll_dtu_once(fasta_bytes, batch_num, total_batches):
     """Submit one batch to DTU and poll for results. Returns results dict."""
     files = {
         "uploadfile": ("input.fasta", fasta_bytes, "text/plain"),

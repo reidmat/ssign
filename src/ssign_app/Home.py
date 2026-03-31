@@ -1350,6 +1350,10 @@ with tab_run:
 
                 def _run_one_genome(idx):
                     add_script_run_ctx(threading.current_thread(), _ctx)
+                    # Stagger starts to avoid overwhelming cloud APIs
+                    if idx > 0:
+                        import time as _time
+                        _time.sleep(idx * 10)  # 10s offset per genome
                     cfg = genome_configs[idx]
                     bar, status = genome_progress[idx]
 

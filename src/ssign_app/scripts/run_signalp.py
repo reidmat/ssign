@@ -86,7 +86,24 @@ def run_local_signalp(input_fasta, signalp_path, output_dir):
 
 # ── Remote mode (DTU web server) ──
 
-def run_remote_signalp(input_fasta, output_dir):
+def run_remote_signalp(input_fasta, output_dir, max_retries=3):
+    """Submit to DTU SignalP 6.0 web server with retry on failure."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            return _run_remote_signalp_once(input_fasta, output_dir)
+        except RuntimeError as e:
+            if attempt < max_retries:
+                wait = 30 * attempt
+                logger.warning(
+                    f"DTU SignalP attempt {attempt}/{max_retries} failed: {e}. "
+                    f"Retrying in {wait}s..."
+                )
+                time.sleep(wait)
+            else:
+                raise
+
+
+def _run_remote_signalp_once(input_fasta, output_dir):
     """Submit to DTU SignalP 6.0 web server directly.
 
     Same approach as DeepLocPro: FASTA sent via file upload field.
