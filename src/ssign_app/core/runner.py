@@ -1064,10 +1064,15 @@ class PipelineRunner:
     def _step_integrate(self) -> StepResult:
         output = self._wf(f"{self.config.sample_id}_integrated.csv")
 
+        # Annotation tools only (NOT SignalP — that's a prediction tool,
+        # already included via cross_validate → substrates_filtered)
         annotation_files = []
-        for key in ['blastp', 'hhsuite', 'interproscan', 'protparam', 'signalp']:
+        for key in ['blastp', 'hhsuite', 'interproscan', 'protparam']:
             if key in self.files and os.path.exists(self.files[key]):
                 annotation_files.append(self.files[key])
+
+        # Also pass gene_info for GBFF annotations
+        gene_info = self.files.get('gene_info', '')
 
         args = [
             "--substrates-filtered", self.files.get('substrates_filtered', ''),
@@ -1075,6 +1080,11 @@ class PipelineRunner:
             "--sample", self.config.sample_id,
             "--output", output,
         ]
+        proteins = self.files.get('proteins', '')
+        if gene_info and os.path.exists(gene_info):
+            args.extend(["--gene-info", gene_info])
+        if proteins and os.path.exists(proteins):
+            args.extend(["--proteins", proteins])
         if annotation_files:
             args.extend(["--annotations"] + annotation_files)
 
@@ -1473,19 +1483,46 @@ class PipelineRunner:
 
         # ── Organize columns like reference CSV ──
         # Priority column order (present columns are moved to front)
+        # Column order matching the reference CSV structure
         priority_cols = [
-            'locus_tag', 'sample_id', 'product', 'gbff_annotation',
+            # Identity
+            'locus_tag', 'sample_id',
+            # Consensus annotations (Phase 3 — computed if available)
             'broad_consensus_annotation', 'broad_annotation',
             'detailed_annotation', 'detailed_consensus_annotation',
             'evidence_keywords', 'n_tools_agreeing', 'n_tools_with_hits',
             'concordance_ratio', 'confidence_tier',
+            # Physicochemical properties
             'aa_length', 'gravy', 'mw_da', 'isoelectric_point',
             'charge_ph7', 'instability_index', 'aromaticity',
-            'nearby_ss_types',
-            'predicted_localization', 'is_extracellular',
-            'dlp_extracellular_prob', 'dlp_max_localization', 'dlp_max_probability',
+            # Secretion system context
+            'nearby_ss_types', 'secretion_evidence', 'is_secreted',
+            # Localization predictions (DeepLocPro)
+            'predicted_localization', 'dlp_extracellular_prob',
+            'dlp_max_localization', 'dlp_max_probability',
+            'periplasmic_prob', 'outer_membrane_prob', 'cytoplasmic_prob',
+            # Secretion type prediction (DeepSecE)
             'dse_ss_type', 'dse_max_prob',
+            # Signal peptide prediction (SignalP)
             'signalp_prediction', 'signalp_probability', 'signalp_cs_position',
+            # GBFF original annotation
+            'gbff_annotation',
+            # BLASTp hits
+            'blastp_hit_accession', 'blastp_hit_description',
+            'blastp_pident', 'blastp_qcov', 'blastp_evalue',
+            # HHpred Pfam
+            'pfam_top1_id', 'pfam_top1_description', 'pfam_top1_probability',
+            'pfam_top1_evalue', 'pfam_top1_score',
+            # HHpred PDB
+            'pdb_top1_id', 'pdb_top1_description', 'pdb_top1_probability',
+            'pdb_top1_evalue', 'pdb_top1_score',
+            # InterProScan
+            'interpro_domains', 'interpro_go_terms',
+            'interpro_pfam_ids', 'interpro_descriptions',
+            # Ortholog groups
+            'ortholog_group', 'og_n_members', 'og_mean_pident',
+            # Annotation tool count
+            'annotation_tools',
         ]
         if not df_subs.empty:
             existing_priority = [c for c in priority_cols if c in df_subs.columns]

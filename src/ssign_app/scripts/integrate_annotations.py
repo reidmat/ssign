@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 """Integrate all annotation sources into master CSV.
 
-Left-join merges on locus_tag, then computes annotation consensus
-across tools: BLASTp, Foldseek, InterProScan, HHpred (Pfam), HHpred (PDB),
-pLM-BLAST, GBFF (original genome annotation), and SignalP.
+Left-join merges on locus_tag, adds GBFF annotation from gene_info,
+protein sequences, and computes annotation tool hit counts.
 
-Consensus voting counts how many tools provided a hit for each protein
-(n_tools_with_hits) — GBFF annotations are included as a tool.
+Annotation tools counted: BLASTp, HHpred (Pfam), HHpred (PDB),
+InterProScan, ProtParam, GBFF (original genome annotation).
+
+SignalP is a secretion prediction tool (not an annotation tool) and
+is already included in the substrates table via cross_validate.
 """
 
 import argparse
-import csv
 import logging
 import os
 
 import pandas as pd
+from Bio import SeqIO
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Columns to check for annotation hits per tool
+# Annotation tool columns — used for n_tools_with_hits counting
+# SignalP is NOT here (it's a prediction tool, not annotation)
 TOOL_HIT_COLUMNS = {
     'BLASTp': 'blastp_hit_description',
     'HHpred_Pfam': 'pfam_top1_description',
@@ -27,13 +30,12 @@ TOOL_HIT_COLUMNS = {
     'InterProScan': 'interpro_domains',
     'Foldseek': 'foldseek_hit_description',
     'pLM-BLAST': 'ecod70_top1_description',
-    'GBFF': 'product',
-    'SignalP': 'signalp_prediction',
+    'GBFF': 'gbff_annotation',
 }
 
 
 def _compute_tool_counts(df):
-    """Add n_tools_with_hits and tool_hits_list columns."""
+    """Add n_tools_with_hits and annotation_tools columns."""
     def _count_hits(row):
         hits = []
         for tool, col in TOOL_HIT_COLUMNS.items():
@@ -45,9 +47,6 @@ def _compute_tool_counts(df):
             # For GBFF, skip generic annotations
             if tool == 'GBFF' and str(val).strip().lower() in (
                 'hypothetical protein', 'uncharacterized protein', ''):
-                continue
-            # For SignalP, only count if a signal peptide was found
-            if tool == 'SignalP' and str(val).strip().upper() in ('OTHER', ''):
                 continue
             hits.append(tool)
         return hits
@@ -63,6 +62,10 @@ def main():
     parser.add_argument("--substrates-filtered", required=True)
     parser.add_argument("--substrates-all", required=True)
     parser.add_argument("--annotations", nargs='*', default=[])
+    parser.add_argument("--gene-info", default="",
+                        help="Gene info TSV from extract_proteins (for GBFF annotation)")
+    parser.add_argument("--proteins", default="",
+                        help="Proteins FASTA (to include sequences in output)")
     parser.add_argument("--sample", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
@@ -70,6 +73,35 @@ def main():
     # Load base substrate table
     df = pd.read_csv(args.substrates_filtered, sep='\t')
     logger.info(f"Base: {len(df)} filtered substrates for {args.sample}")
+
+    # Add GBFF annotation from gene_info (original genome annotations)
+    if args.gene_info and os.path.exists(args.gene_info):
+        try:
+            gi = pd.read_csv(args.gene_info, sep='\t')
+            if 'locus_tag' in gi.columns and 'product' in gi.columns:
+                gi_ann = gi[['locus_tag', 'product']].copy()
+                gi_ann = gi_ann.rename(columns={'product': 'gbff_annotation'})
+                gi_ann = gi_ann.drop_duplicates(subset='locus_tag')
+                before = len(df)
+                df = df.merge(gi_ann, on='locus_tag', how='left')
+                assert len(df) == before
+                logger.info(f"Added GBFF annotations from gene_info")
+        except Exception as e:
+            logger.warning(f"Failed to add GBFF annotations: {e}")
+
+    # Add protein sequences
+    if args.proteins and os.path.exists(args.proteins):
+        try:
+            seqs = {}
+            for rec in SeqIO.parse(args.proteins, 'fasta'):
+                seqs[rec.id] = str(rec.seq)
+            if seqs and 'locus_tag' in df.columns:
+                df['sequence'] = df['locus_tag'].map(seqs)
+                df['aa_length'] = df['sequence'].apply(
+                    lambda s: len(s) if pd.notna(s) else 0)
+                logger.info(f"Added sequences for {df['sequence'].notna().sum()} proteins")
+        except Exception as e:
+            logger.warning(f"Failed to add sequences: {e}")
 
     # Left-join each annotation file
     for ann_file in args.annotations:
@@ -106,7 +138,7 @@ def main():
         except Exception as e:
             logger.warning(f"Failed to merge {ann_file}: {e}")
 
-    # Compute tool hit counts (including GBFF)
+    # Compute tool hit counts
     df = _compute_tool_counts(df)
 
     # Write output

@@ -73,13 +73,14 @@ def main():
 
     fieldnames = [
         'locus_tag', 'sample_id',
-        # DeepLocPro
-        'predicted_localization', 'extracellular_prob',
+        # DeepLocPro (all scores preserved)
+        'predicted_localization', 'dlp_extracellular_prob',
+        'dlp_max_localization', 'dlp_max_probability',
         'periplasmic_prob', 'outer_membrane_prob', 'cytoplasmic_prob',
         # DeepSecE
         'dse_ss_type', 'dse_max_prob', 'dse_T3SS_flagged',
-        # SignalP
-        'signalp_prediction', 'signalp_probability',
+        # SignalP (all fields preserved)
+        'signalp_prediction', 'signalp_probability', 'signalp_cs_position',
         # Secretion determination
         'is_secreted', 'secretion_evidence', 'product',
     ]
@@ -137,7 +138,9 @@ def main():
                 'locus_tag': locus,
                 'sample_id': args.sample,
                 'predicted_localization': dlp.get('predicted_localization', ''),
-                'extracellular_prob': ext_prob,
+                'dlp_extracellular_prob': ext_prob,
+                'dlp_max_localization': dlp.get('max_localization', dlp.get('predicted_localization', '')),
+                'dlp_max_probability': dlp.get('max_probability', ext_prob),
                 'periplasmic_prob': dlp.get('periplasmic_prob', ''),
                 'outer_membrane_prob': dlp.get('outer_membrane_prob', ''),
                 'cytoplasmic_prob': dlp.get('cytoplasmic_prob', ''),
@@ -146,6 +149,7 @@ def main():
                 'dse_T3SS_flagged': t3ss_flagged,
                 'signalp_prediction': sp_pred,
                 'signalp_probability': sp_prob,
+                'signalp_cs_position': sp.get('signalp_cs_position', ''),
                 'is_secreted': is_secreted,
                 'secretion_evidence': ','.join(evidence) if evidence else '',
                 'product': dlp.get('product', dse.get('product', '')),
