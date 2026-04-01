@@ -298,11 +298,12 @@ class PipelineRunner:
                 ("Predicting signal peptides (SignalP)", self._step_signalp))
 
         # Annotation tools (parallel group 2)
+        # HHpred listed first so it starts immediately — it's the bottleneck
         annotation_steps = []
-        if not self.config.skip_blastp:
-            annotation_steps.append(("Running BLASTp", self._step_blastp))
         if not self.config.skip_hhsuite:
             annotation_steps.append(("Running HH-suite", self._step_hhsuite))
+        if not self.config.skip_blastp:
+            annotation_steps.append(("Running BLASTp", self._step_blastp))
         if not self.config.skip_interproscan:
             annotation_steps.append(
                 ("Running InterProScan", self._step_interproscan))
@@ -1239,9 +1240,11 @@ class PipelineRunner:
                 ],
                 "files": self.files,
             }
-            # Per-genome progress file to support multi-genome resume
+            # Per-genome progress file in hidden .ssign/ subdirectory
             sid = self.config.sample_id
-            progress_path = outdir / f"{sid}_progress.json"
+            progress_dir = outdir / ".ssign"
+            progress_dir.mkdir(exist_ok=True)
+            progress_path = progress_dir / f"{sid}_progress.json"
             with open(progress_path, 'w') as f:
                 json.dump(progress, f, indent=2)
         except Exception as e:
@@ -1253,13 +1256,15 @@ class PipelineRunner:
 
         Returns (list[StepResult], dict_files, work_dir) or (None, {}, "").
         """
-        # Try per-genome progress file first, fall back to legacy shared file
+        # Try per-genome progress file in .ssign/ subdirectory, then legacy locations
         if sample_id:
-            progress_path = Path(outdir) / f"{sample_id}_progress.json"
+            progress_path = Path(outdir) / ".ssign" / f"{sample_id}_progress.json"
+            if not progress_path.exists():
+                # Legacy: progress file in outdir root
+                progress_path = Path(outdir) / f"{sample_id}_progress.json"
         else:
-            progress_path = Path(outdir) / "ssign_progress.json"
+            progress_path = Path(outdir) / ".ssign" / "ssign_progress.json"
         if not progress_path.exists():
-            # Try legacy filename
             progress_path = Path(outdir) / "ssign_progress.json"
         if not progress_path.exists():
             return None, {}, ""

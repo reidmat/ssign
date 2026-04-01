@@ -23,8 +23,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
-        "Get help": "https://github.com/billerbeck-lab/ssign",
-        "Report a Bug": "https://github.com/billerbeck-lab/ssign/issues",
+        "Get help": "https://github.com/reidmat/ssign",
+        "Report a Bug": "https://github.com/reidmat/ssign/issues",
         "About": "ssign — Secretion-system Identification for Gram Negatives",
     },
 )
@@ -95,9 +95,11 @@ def _has_previous_progress(outdir_val: str) -> bool:
     if not outdir_val or not os.path.isdir(outdir_val):
         return False
     import glob
-    # Check for per-genome progress files or legacy shared file
+    ssign_dir = os.path.join(outdir_val, ".ssign")
     return bool(
-        glob.glob(os.path.join(outdir_val, "*_progress.json"))
+        glob.glob(os.path.join(ssign_dir, "*_progress.json"))
+        # Legacy locations
+        or glob.glob(os.path.join(outdir_val, "*_progress.json"))
         or os.path.exists(os.path.join(outdir_val, "ssign_progress.json"))
     )
 
@@ -380,8 +382,8 @@ with st.sidebar:
     from ssign_app import __version__
     st.caption(f"ssign v{__version__} | GPLv3 | Billerbeck Lab")
     st.markdown(
-        "[GitHub](https://github.com/billerbeck-lab/ssign) · "
-        "[Report a bug](https://github.com/billerbeck-lab/ssign/issues)"
+        "[GitHub](https://github.com/reidmat/ssign) · "
+        "[Report a bug](https://github.com/reidmat/ssign/issues)"
     )
 
 
@@ -546,11 +548,16 @@ with tab_upload:
     if outdir_val and _has_previous_progress(outdir_val):
         try:
             import json, glob as _glob
-            # Collect all per-genome progress files
+            # Collect per-genome progress files from .ssign/ subdirectory
+            ssign_dir = os.path.join(outdir_val, ".ssign")
             prog_files = sorted(
-                _glob.glob(os.path.join(outdir_val, "*_progress.json"))
+                _glob.glob(os.path.join(ssign_dir, "*_progress.json"))
             )
-            # Fall back to legacy shared file
+            # Legacy: progress files in outdir root
+            if not prog_files:
+                prog_files = sorted(
+                    _glob.glob(os.path.join(outdir_val, "*_progress.json"))
+                )
             if not prog_files:
                 legacy = os.path.join(outdir_val, "ssign_progress.json")
                 if os.path.exists(legacy):
@@ -1260,14 +1267,16 @@ with tab_run:
 
         st.warning(
             "**Before you run:**\n"
+            "- The time estimate above is an **initial estimate** based on typical genomes. "
+            "It will update with actual numbers once the pipeline discovers how many "
+            "secreted proteins each genome has.\n"
             "- Closing the **browser tab** is safe — the pipeline continues in the "
-            "background and results are saved.\n"
-            "- Closing the **terminal** will stop the pipeline. Partial progress is "
-            "saved to the output directory.\n"
-            "- If interrupted, re-run with the same output directory and **Resume** "
-            "enabled to continue.\n"
-            "- A full run with all tools enabled takes **1-3 hours** depending on "
-            "genome size and API load."
+            "background and results are saved to the output directory.\n"
+            "- Closing the **terminal** will stop the pipeline. If interrupted, re-run "
+            "with the same output directory and **Resume** to continue where you left off.\n"
+            "- An internet disconnection will cause active API calls to fail, but the "
+            "retry logic will attempt to recover. If retries are exhausted, the failed "
+            "step can be resumed later."
         )
 
         # Resume — use run mode from Upload tab if set, otherwise detect here
