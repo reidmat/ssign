@@ -1170,40 +1170,91 @@ with tab_run:
             for issue in issues:
                 st.warning(issue)
 
-        # Estimated time
+        # Estimated time — based on measured per-protein API timings:
+        #   DeepLocPro:    ~6s per neighborhood protein (DTU batch, ~100 proteins/11 min)
+        #   SignalP:       ~3s per neighborhood protein (DTU batch)
+        #   BLASTp:        ~30s per secreted protein (NCBI, 15s between batches)
+        #   HHpred:        ~260s per secreted protein (MPI, 20s submit + ~200s processing)
+        #   InterProScan:  ~15s per secreted protein (EBI, 1s submit + polling)
+        #   ProtParam:     instant (local)
+        #   MacSyFinder:   ~2-5 min per genome (local)
+        #
+        # Typical genome: ~100 neighborhood proteins, ~5-10 secreted proteins
         st.divider()
         n_genomes = len(uploaded_files) or 1
-        st.markdown("**Estimated run time** (per genome):")
+        # Assume typical counts (refined once pipeline runs)
+        est_neighborhood = 100  # typical neighborhood proteins per genome
+        est_secreted = 8        # typical secreted proteins per genome
 
-        time_parts = ["MacSyFinder v2: ~2-5 min", "DeepLocPro (BioLib): ~5-10 min"]
-        if st.session_state.get("run_deepsece"):
-            time_parts.append("DeepSecE: ~2-5 min")
-        if st.session_state.get("run_blastp"):
-            time_parts.append("BLASTp (NCBI API): ~30-60 min")
-        if st.session_state.get("run_hh"):
-            time_parts.append("HHpred (MPI API): ~45-90 min")
-        if st.session_state.get("run_iprs"):
-            time_parts.append("InterProScan (EBI API): ~20-40 min")
+        st.markdown("**Estimated run time:**")
+        st.caption(
+            f"Based on typical genome (~{est_neighborhood} neighborhood proteins, "
+            f"~{est_secreted} secreted proteins). Actual time depends on genome "
+            f"content and API server load."
+        )
+
+        # Per-genome time breakdown
+        base_min = 5  # MacSyFinder + local steps
+        dlp_min = max(5, est_neighborhood * 6 / 60)  # ~6s per protein
+        sp_min = max(3, est_neighborhood * 3 / 60) if st.session_state.get("run_signalp") else 0
+        dse_min = 3 if st.session_state.get("run_deepsece") else 0
+        # Prediction tools run in parallel — take the max
+        prediction_min = max(dlp_min, sp_min, dse_min)
+
+        blastp_min = est_secreted * 30 / 60 if st.session_state.get("run_blastp") else 0
+        hh_min = est_secreted * 260 / 60 if st.session_state.get("run_hh") else 0
+        iprs_min = est_secreted * 15 / 60 if st.session_state.get("run_iprs") else 0
+        # Annotation tools run in parallel — take the max
+        annotation_min = max(blastp_min, hh_min, iprs_min)
+
+        per_genome_min = base_min + prediction_min + annotation_min
+
+        time_parts = [f"Local steps (MacSyFinder, filtering): ~{base_min} min"]
+        time_parts.append(f"Predictions (DeepLocPro{' + SignalP' if sp_min else ''}{' + DeepSecE' if dse_min else ''}): ~{prediction_min:.0f} min")
+        if annotation_min > 0:
+            ann_tools = []
+            if blastp_min: ann_tools.append(f"BLASTp ~{blastp_min:.0f} min")
+            if hh_min: ann_tools.append(f"HHpred ~{hh_min:.0f} min")
+            if iprs_min: ann_tools.append(f"InterProScan ~{iprs_min:.0f} min")
+            time_parts.append(f"Annotations (parallel: {', '.join(ann_tools)}): ~{annotation_min:.0f} min")
 
         for t in time_parts:
             st.markdown(f"- {t}")
 
-        total_min = 15  # base per genome
-        if st.session_state.get("run_blastp"):
-            total_min += 45
-        if st.session_state.get("run_hh"):
-            total_min += 60
-        if st.session_state.get("run_iprs"):
-            total_min += 30
-        total_min *= n_genomes
-        total_max = total_min * 2
+        # Total estimate accounting for parallelism
+        if n_genomes == 1:
+            total_min = per_genome_min
+        else:
+            # With semaphore-based scheduling:
+            # - Local steps: all parallel (fast)
+            # - DTU predictions: 5 concurrent → n_genomes/5 batches
+            # - HHpred: sequential (1 at a time) → bottleneck
+            # - Other annotations: 5 concurrent
+            dtu_batches = max(1, n_genomes / 5)
+            hh_sequential = n_genomes  # 1 at a time
+            local_total = base_min  # all parallel, ~same time
+            pred_total = prediction_min * dtu_batches
+            if hh_min > 0:
+                ann_total = hh_min * hh_sequential  # HHpred is the bottleneck
+            else:
+                ann_batches = max(1, n_genomes / 5)
+                ann_total = annotation_min * ann_batches
+            total_min = local_total + pred_total + ann_total
+
+        total_max = total_min * 1.5  # API variability
         genome_note = f" for {n_genomes} genome(s)" if n_genomes > 1 else ""
         if total_min >= 100:
             est_low = f"{total_min / 60:.1f}"
             est_high = f"{total_max / 60:.1f}"
             st.info(f"**Estimated total: ~{est_low}-{est_high} hours{genome_note}** (rough estimate, depends on API load)")
         else:
-            st.info(f"**Estimated total: ~{total_min}-{total_max} minutes{genome_note}** (rough estimate, depends on API load)")
+            st.info(f"**Estimated total: ~{total_min:.0f}-{total_max:.0f} minutes{genome_note}** (rough estimate, depends on API load)")
+
+        if n_genomes > 1 and hh_min > 0:
+            st.caption(
+                f"HHpred is the bottleneck for multi-genome runs (~{hh_min:.0f} min per genome, "
+                f"runs one genome at a time due to MPI rate limits)."
+            )
 
         st.divider()
 
