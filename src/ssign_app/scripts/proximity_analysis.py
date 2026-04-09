@@ -126,7 +126,8 @@ def main():
 
             # Check DeepLocPro extracellular
             try:
-                dlp_ext_prob = float(pred.get('extracellular_prob', 0))
+                dlp_ext_prob = float(pred.get('dlp_extracellular_prob',
+                                                pred.get('extracellular_prob', 0)))
             except (ValueError, TypeError):
                 dlp_ext_prob = 0.0
 
@@ -165,8 +166,14 @@ def main():
                         'tool': '+'.join(tool),
                         'nearby_ss_types': {ss_type},
                         'dlp_extracellular_prob': dlp_ext_prob,
+                        'predicted_localization': pred.get('predicted_localization', ''),
+                        'dlp_max_localization': pred.get('dlp_max_localization', ''),
+                        'dlp_max_probability': pred.get('dlp_max_probability', ''),
                         'dse_ss_type': dse_type,
                         'dse_max_prob': dse_max_prob,
+                        'signalp_prediction': pred.get('signalp_prediction', ''),
+                        'signalp_probability': pred.get('signalp_probability', ''),
+                        'signalp_cs_position': pred.get('signalp_cs_position', ''),
                         'product': pred.get('product', ''),
                     }
                 else:
@@ -206,7 +213,10 @@ def main():
 
     # Write output
     fieldnames = ['locus_tag', 'sample_id', 'tool', 'nearby_ss_types',
-                  'dlp_extracellular_prob', 'dse_ss_type', 'dse_max_prob',
+                  'dlp_extracellular_prob', 'predicted_localization',
+                  'dlp_max_localization', 'dlp_max_probability',
+                  'dse_ss_type', 'dse_max_prob',
+                  'signalp_prediction', 'signalp_probability', 'signalp_cs_position',
                   'dse_type_match', 'product']
     with open(args.output, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='\t')

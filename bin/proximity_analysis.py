@@ -18,6 +18,10 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+import os as _os, sys as _sys
+_scripts_dir = _os.path.dirname(_os.path.abspath(__file__))
+if _scripts_dir not in _sys.path:
+    _sys.path.insert(0, _scripts_dir)
 from ssign_lib.constants import DSE_TO_MACSYFINDER
 
 
@@ -122,7 +126,8 @@ def main():
 
             # Check DeepLocPro extracellular
             try:
-                dlp_ext_prob = float(pred.get('extracellular_prob', 0))
+                dlp_ext_prob = float(pred.get('dlp_extracellular_prob',
+                                                pred.get('extracellular_prob', 0)))
             except (ValueError, TypeError):
                 dlp_ext_prob = 0.0
 
@@ -161,8 +166,14 @@ def main():
                         'tool': '+'.join(tool),
                         'nearby_ss_types': {ss_type},
                         'dlp_extracellular_prob': dlp_ext_prob,
+                        'predicted_localization': pred.get('predicted_localization', ''),
+                        'dlp_max_localization': pred.get('dlp_max_localization', ''),
+                        'dlp_max_probability': pred.get('dlp_max_probability', ''),
                         'dse_ss_type': dse_type,
                         'dse_max_prob': dse_max_prob,
+                        'signalp_prediction': pred.get('signalp_prediction', ''),
+                        'signalp_probability': pred.get('signalp_probability', ''),
+                        'signalp_cs_position': pred.get('signalp_cs_position', ''),
                         'product': pred.get('product', ''),
                     }
                 else:
@@ -172,9 +183,41 @@ def main():
                     existing_tools.update(tool)
                     substrates[neighbor_locus]['tool'] = '+'.join(sorted(existing_tools))
 
+    # Check DSE-to-system type match and add flag
+    n_type_match = 0
+    n_type_mismatch = 0
+    for sub in substrates.values():
+        nearby = sub['nearby_ss_types']
+        dse_type = sub.get('dse_ss_type', 'Non-secreted')
+
+        # Normalize DSE type to match MacSyFinder naming
+        # DSE uses T1SS/T2SS/T4SS/T6SS; MacSyFinder uses T1SS/T2SS/T4SS/T6SSi/T6SSii/T6SSiii
+        dse_match = False
+        if dse_type and dse_type != 'Non-secreted':
+            for ss in nearby:
+                if ss.startswith(dse_type.rstrip('i')):  # T6SS matches T6SSi/ii/iii
+                    dse_match = True
+                    break
+        sub['dse_type_match'] = dse_match
+        if 'DSE' in sub.get('tool', ''):
+            if dse_match:
+                n_type_match += 1
+            else:
+                n_type_mismatch += 1
+
+    if n_type_mismatch:
+        logger.info(
+            f"DSE type filter: {n_type_match} match nearby SS, "
+            f"{n_type_mismatch} mismatch (DSE type differs from nearby MacSyFinder system)"
+        )
+
     # Write output
     fieldnames = ['locus_tag', 'sample_id', 'tool', 'nearby_ss_types',
-                  'dlp_extracellular_prob', 'dse_ss_type', 'dse_max_prob', 'product']
+                  'dlp_extracellular_prob', 'predicted_localization',
+                  'dlp_max_localization', 'dlp_max_probability',
+                  'dse_ss_type', 'dse_max_prob',
+                  'signalp_prediction', 'signalp_probability', 'signalp_cs_position',
+                  'dse_type_match', 'product']
     with open(args.output, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='\t')
         writer.writeheader()
