@@ -565,6 +565,7 @@ with tab_upload:
             total_steps = 0
             genome_summaries = []
             latest_time = "unknown"
+            saved_config = {}
             for pf_path in prog_files:
                 with open(pf_path) as pf:
                     prev = json.load(pf)
@@ -576,6 +577,9 @@ with tab_upload:
                 latest_time = prev.get("timestamp", latest_time)
                 status = "complete" if n_done == len(prev_steps) else f"{n_done}/{len(prev_steps)} steps"
                 genome_summaries.append(f"- **{sid}**: {status}")
+                # Keep the first genome's config as representative
+                if not saved_config and prev.get("config"):
+                    saved_config = prev["config"]
 
             st.divider()
             st.markdown("#### Previous Run Detected")
@@ -600,6 +604,32 @@ with tab_upload:
                     key="run_mode_choice",
                     index=0,
                 )
+
+            # Restore saved tool settings when resuming
+            if saved_config and run_mode and "Resume" in run_mode:
+                _cfg_to_session = {
+                    'skip_hhsuite': ('run_hh', lambda v: not v),
+                    'skip_blastp': ('run_blastp', lambda v: not v),
+                    'skip_interproscan': ('run_iprs', lambda v: not v),
+                    'skip_signalp': ('run_signalp', lambda v: not v),
+                    'skip_deepsece': ('run_deepsece', lambda v: not v),
+                    'skip_protparam': ('run_protparam', lambda v: not v),
+                    'conf_threshold': ('conf_threshold', None),
+                    'wholeness_threshold': ('wholeness_threshold', None),
+                    'proximity_window': ('proximity_window', None),
+                    'blastp_min_pident': ('blastp_min_pident', None),
+                    'blastp_evalue': ('blastp_evalue', None),
+                }
+                restored = []
+                for cfg_key, (session_key, transform) in _cfg_to_session.items():
+                    if cfg_key in saved_config:
+                        val = saved_config[cfg_key]
+                        if transform:
+                            val = transform(val)
+                        st.session_state[session_key] = val
+                        restored.append(session_key)
+                if restored:
+                    st.caption(f"Restored settings from previous run: {', '.join(restored)}")
             if run_mode and "Selective" in run_mode:
                 st.markdown("**Select steps to rerun** (unchecked = keep previous result):")
                 cols = st.columns(3)

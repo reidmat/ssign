@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
@@ -1249,6 +1249,7 @@ class PipelineRunner:
                     for r in self.results
                 ],
                 "files": self.files,
+                "config": asdict(self.config),
             }
             # Per-genome progress file in hidden .ssign/ subdirectory
             sid = self.config.sample_id
@@ -1264,7 +1265,8 @@ class PipelineRunner:
     def load_progress(outdir, sample_id=None):
         """Load pipeline progress from a previous run.
 
-        Returns (list[StepResult], dict_files, work_dir) or (None, {}, "").
+        Returns (list[StepResult], dict_files, work_dir, config_dict) or
+        (None, {}, "", {}).
         """
         # Try per-genome progress file in .ssign/ subdirectory, then legacy locations
         if sample_id:
@@ -1277,7 +1279,7 @@ class PipelineRunner:
         if not progress_path.exists():
             progress_path = Path(outdir) / "ssign_progress.json"
         if not progress_path.exists():
-            return None, {}, ""
+            return None, {}, "", {}
         try:
             with open(progress_path) as f:
                 data = json.load(f)
@@ -1287,15 +1289,16 @@ class PipelineRunner:
             ]
             files = data.get("files", {})
             work_dir = data.get("work_dir", "")
-            return results, files, work_dir
+            saved_config = data.get("config", {})
+            return results, files, work_dir, saved_config
         except Exception:
-            return None, {}, ""
+            return None, {}, "", {}
 
     def _try_resume(self) -> set:
         """Attempt to resume from previous progress. Returns set of step
         names to skip (already completed successfully with valid outputs).
         """
-        prev_results, prev_files, prev_work_dir = self.load_progress(
+        prev_results, prev_files, prev_work_dir, _saved_config = self.load_progress(
             self.config.outdir, self.config.sample_id
         )
         if prev_results is None:
