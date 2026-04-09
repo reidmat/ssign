@@ -113,9 +113,19 @@ def compute_consensus(tool_descriptions: dict[str, str]) -> dict:
         evidence_parts.append(f"{cat}[{','.join(tools)}]")
     evidence = '; '.join(evidence_parts)
 
-    # Detailed: all unique categories found
-    all_cats = sorted(set(cat for cats in tool_categories.values() for cat in cats))
-    detailed = ' | '.join(all_cats)
+    # Detailed: extract specific terms from each tool description.
+    # Split on common separators (;|,) and clean up.
+    specific_terms = set()
+    for desc in tool_descriptions.values():
+        for part in re.split(r'[;|]', desc):
+            term = part.strip()
+            if term and len(term) > 3 and term.lower() not in (
+                'hypothetical protein', 'uncharacterized protein', ''):
+                # Shorten long domain descriptions to first meaningful phrase
+                if len(term) > 60:
+                    term = term[:60].rsplit(' ', 1)[0] + '...'
+                specific_terms.add(term)
+    detailed = ' | '.join(sorted(specific_terms)[:15])  # cap at 15 terms
 
     # Concordance
     concordance = n_agreeing / n_tools if n_tools > 0 else 0.0
