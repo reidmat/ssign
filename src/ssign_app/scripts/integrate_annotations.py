@@ -27,7 +27,7 @@ TOOL_HIT_COLUMNS = {
     'BLASTp': 'blastp_hit_description',
     'HHpred_Pfam': 'pfam_top1_description',
     'HHpred_PDB': 'pdb_top1_description',
-    'InterProScan': 'interpro_domains',
+    'InterProScan': 'interpro_descriptions',
     'Foldseek': 'foldseek_hit_description',
     'pLM-BLAST': 'ecod70_top1_description',
     'GBFF': 'gbff_annotation',
