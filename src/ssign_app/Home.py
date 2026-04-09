@@ -869,13 +869,17 @@ with tab_pipeline:
         )
 
         deepsece_available = False
+        deepsece_checkpoint_ok = False
         try:
             import DeepSecE
             deepsece_available = True
+            # Check if the model checkpoint exists (~2.5 GB)
+            _dse_ckpt = os.path.join(os.path.expanduser("~"), ".ssign", "models", "deepsece_checkpoint.pt")
+            deepsece_checkpoint_ok = os.path.isfile(_dse_ckpt) and os.path.getsize(_dse_ckpt) > 100_000_000
         except ImportError:
             pass
 
-        if deepsece_available:
+        if deepsece_available and deepsece_checkpoint_ok:
             st.success("DeepSecE is installed and ready.")
             run_deepsece = st.checkbox(
                 "Enable DeepSecE", value=True, key="run_deepsece",
@@ -885,6 +889,31 @@ with tab_pipeline:
                     st.slider("Min. probability", 0.0, 1.0, 0.8, 0.05,
                               key="dse_min_prob",
                               help="Minimum DeepSecE probability to call a protein as secreted.")
+        elif deepsece_available and not deepsece_checkpoint_ok:
+            run_deepsece = st.checkbox(
+                "Enable DeepSecE", value=False, key="run_deepsece",
+                disabled=True,
+            )
+            _dse_path = os.path.join("~", ".ssign", "models", "deepsece_checkpoint.pt")
+            st.warning(
+                "**DeepSecE package is installed but the model checkpoint is missing** "
+                f"(~2.5 GB, expected at `{_dse_path}`).\n\n"
+                "The checkpoint server (SJTU, China) can be unreliable. "
+                "Download it manually:\n"
+                "```bash\n"
+                "mkdir -p ~/.ssign/models\n"
+                "wget -c --tries=5 --timeout=60 \\\n"
+                "  https://tool2-mml.sjtu.edu.cn/DeepSecE/checkpoint.pt \\\n"
+                "  -O ~/.ssign/models/deepsece_checkpoint.pt\n"
+                "```\n"
+                "Or with curl:\n"
+                "```bash\n"
+                "curl -L --retry 5 --connect-timeout 60 -o \\\n"
+                "  ~/.ssign/models/deepsece_checkpoint.pt \\\n"
+                "  https://tool2-mml.sjtu.edu.cn/DeepSecE/checkpoint.pt\n"
+                "```\n"
+                "Restart ssign after the download completes."
+            )
         else:
             run_deepsece = st.checkbox(
                 "Enable DeepSecE", value=False, key="run_deepsece",
