@@ -427,12 +427,20 @@ class PipelineRunner:
                         try:
                             result = future.result()
                             self.results.append(result)
+                            pct = int(100 * sc / total)
                             print(
                                 f"[ssign] [{self.config.sample_id}] Finished (parallel): {name} -> "
                                 f"{'OK' if result.success else 'FAILED: ' + result.message[:100]}",
                                 flush=True,
                             )
-                            if not result.success:
+                            if result.success:
+                                self.progress(
+                                    name, pct,
+                                    f"Done: {result.message} | {self._elapsed_str()} elapsed")
+                            else:
+                                self.progress(
+                                    name, pct,
+                                    f"Failed: {result.message}")
                                 logger.error(
                                     f"Step '{name}' failed: "
                                     f"{result.message}"
@@ -474,7 +482,11 @@ class PipelineRunner:
                             f"{'OK' if result.success else 'FAILED: ' + result.message[:100]}",
                             flush=True,
                         )
-                        if not result.success:
+                        if result.success:
+                            self.progress(
+                                name, pct,
+                                f"Done: {result.message} | {self._elapsed_str()} elapsed")
+                        else:
                             self.progress(
                                 name, pct,
                                 f"Failed: {result.message}")
