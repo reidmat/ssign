@@ -54,3 +54,6 @@ htmlcov/
 # Secrets / credentials
 .env
 *.pem
+
+# Claude Code instructions (not for public release)
+CLAUDE.md
