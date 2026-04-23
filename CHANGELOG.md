@@ -37,6 +37,14 @@ Work toward v1.0.0 publication release. See the roadmap in project memory
   secondary fallback. Env var `SSIGN_DEEPSECE_CHECKPOINT_URL` lets
   institutional mirrors override at runtime. GUI download instructions
   updated with the Zenodo mirror first.
+- **Taxonomy resolution now local** via `taxopy` against NCBI `taxdump`.
+  Replaces ~210 lines of E-utilities / urllib / XML parsing in
+  `resolve_taxonomy.py`. Default dump location `~/.ssign/taxdump/` with
+  `SSIGN_TAXDUMP_DIR` env override. Added `taxopy>=0.12` to base deps;
+  taxdump added to the base-tier Zenodo deposit (fetched by
+  `scripts/fetch_databases.sh`). Graceful degradation if the dump isn't
+  installed — returns empty taxid and logs a warning; pipeline continues
+  without taxid-based BLAST exclusion.
 - **Pipeline-order change** — move `enrichment_testing` before
   `filter_by_stats_and_dlp`; stats filter default ON for ≥10 genomes,
   OFF with warning otherwise.

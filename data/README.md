@@ -9,14 +9,17 @@ externally and fetched at install time.
 After a full install, this directory (or a path you pass to ssign via config)
 will contain:
 
-| Database                             | Size    | Purpose                         |
-| ------------------------------------ | ------- | ------------------------------- |
-| BLAST NR                             | ~390 GB | Homology search (annotation)    |
-| Bakta (full)                         | ~84 GB  | Whole-genome gene annotation    |
-| EggNOG-mapper                        | ~50 GB  | Orthologous groups, COGs, KEGG  |
-| HH-suite (Pfam + PDB70 + UniClust30) | ~30 GB  | Remote + structural homology    |
-| InterProScan                         | ~24 GB  | Domain / motif annotation       |
-| pLM-BLAST (ECOD70)                   | ~20 GB  | Embedding-based homology search |
+| Database                                 | Tier            | Size    | Purpose                                               |
+| ---------------------------------------- | --------------- | ------- | ----------------------------------------------------- |
+| NCBI taxdump (`nodes.dmp` + `names.dmp`) | base            | ~1.5 GB | Local taxonomy resolution (replaces NCBI E-utilities) |
+| Bakta (light)                            | base            | ~2 GB   | Gene annotation (light variant)                       |
+| Bakta (full)                             | full            | ~84 GB  | Whole-genome gene annotation                          |
+| EggNOG-mapper                            | extended / full | ~50 GB  | Orthologous groups, COGs, KEGG                        |
+| HH-suite (Pfam + PDB70)                  | extended        | ~20 GB  | Pfam + PDB70 profile HMM databases                    |
+| HH-suite (+ UniRef30)                    | full            | +~25 GB | Adds UniRef30 for deep remote-homology MSA generation |
+| InterProScan                             | extended / full | ~24 GB  | Domain / motif annotation                             |
+| pLM-BLAST (ECOD70)                       | extended / full | ~20 GB  | Embedding-based remote homology                       |
+| BLAST NR                                 | full            | ~390 GB | Primary homology search                               |
 
 ## Getting the databases
 
