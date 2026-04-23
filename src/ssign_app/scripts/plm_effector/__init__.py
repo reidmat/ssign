@@ -27,7 +27,7 @@ Modifications made to the upstream code:
 - Replaced the file-based `.npz` intermediate protocol with in-memory
   tensor passing between feature extraction and ensemble stages.
 
-Top-level API (shape, wired up in a follow-up commit — see 3.1.e.2):
+Top-level API:
     from plm_effector import predict
     predict(
         proteins_fasta="/path/to/input.faa",
@@ -36,12 +36,16 @@ Top-level API (shape, wired up in a follow-up commit — see 3.1.e.2):
         out_path="/path/to/output.tsv",
         device="cuda",
     )
-
-This commit (3.1.e.1) lands the vendored skeleton only: the utils,
-neural-net definitions, and inference helpers. The `predict()` entry
-point, the refactored feature-extraction and ensemble stages, and the
-ssign `run_plm_effector.py` wrapper are added in 3.1.e.2 once this
-skeleton compiles cleanly.
 """
 
-__all__: list[str] = []
+
+# Lazy re-export so the package still imports when torch/transformers/xgboost
+# aren't installed — lets unit tests exercise the pure-Python preprocessing
+# helpers in `utils` on a minimal dev environment.
+def predict(*args, **kwargs):  # noqa: D401
+    from .predict_api import predict as _predict
+
+    return _predict(*args, **kwargs)
+
+
+__all__ = ["predict"]

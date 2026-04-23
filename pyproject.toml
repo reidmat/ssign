@@ -89,6 +89,8 @@ extended = [
     "eggnog-mapper",
     "goatools",
     "obonet",
+    "transformers>=4.30",
+    "xgboost>=2.0",
 ]
 full = [
     "deepsece",
@@ -98,6 +100,8 @@ full = [
     "eggnog-mapper",
     "goatools",
     "obonet",
+    "transformers>=4.30",
+    "xgboost>=2.0",
 ]
 dev = [
     "pytest>=7.0",

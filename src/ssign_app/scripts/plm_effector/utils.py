@@ -17,7 +17,10 @@ import random
 import re
 
 import numpy as np
-import torch
+
+# torch is imported lazily inside the heavy helpers so the pure-Python
+# FASTA parsers can be unit-tested on a minimal dev environment that
+# doesn't have torch installed.
 
 
 _BERT_LIKE = {"Bert", "BioBERT", "ProtBert", "ProtT5"}
@@ -97,8 +100,10 @@ def batch_extract_features(
     `(n_sequences, max_length, hidden_dim)` and
     `(n_sequences, max_length)` respectively.
     """
-    features: list[torch.Tensor] = []
-    attention_masks: list[torch.Tensor] = []
+    import torch  # Lazy — ssign's base install doesn't require torch
+
+    features: list = []
+    attention_masks: list = []
 
     for i in range(0, len(sequences), batch_size):
         batch = sequences[i : i + batch_size]
@@ -129,12 +134,14 @@ def batch_extract_features(
     return all_features, all_attention_masks
 
 
-def pool_features(features, attention_masks, pooling: str = "mean") -> torch.Tensor:
+def pool_features(features, attention_masks, pooling: str = "mean"):
     """Pool per-residue features into a single per-sequence vector.
 
     Supports `"mean"` (default) and `"max"` pooling, masking padding
-    positions via the attention mask.
+    positions via the attention mask. Returns a `torch.Tensor`.
     """
+    import torch  # Lazy — ssign's base install doesn't require torch
+
     if not torch.is_tensor(features):
         features = torch.tensor(features, dtype=torch.float32)
     if not torch.is_tensor(attention_masks):
@@ -151,6 +158,8 @@ def pool_features(features, attention_masks, pooling: str = "mean") -> torch.Ten
 
 def set_seed(seed: int) -> None:
     """Seed Python, NumPy, and PyTorch RNGs for reproducible inference."""
+    import torch  # Lazy — ssign's base install doesn't require torch
+
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

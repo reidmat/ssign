@@ -59,3 +59,17 @@ keywords:
   - "PLM-Effector"
   - "SignalP"
   - "bacterial genomics"
+references:
+  - type: article
+    title: "PLM-effector: unleashing the potential of protein language models for bacterial secreted protein prediction"
+    authors:
+      - family-names: "Zheng"
+        given-names: "Dandan"
+    year: 2026
+    journal: "Briefings in Bioinformatics"
+    volume: "27"
+    issue: "2"
+    notes: >-
+      ssign vendors PLM-Effector source code (github.com/zhengdd0422/PLM-Effector,
+      CC-BY 3.0) into `src/ssign_app/scripts/plm_effector/`. Please cite this
+      paper alongside ssign if your analysis uses PLM-Effector predictions.
