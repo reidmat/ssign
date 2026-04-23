@@ -288,4 +288,4 @@ ssign is distributed under the **GNU General Public License v3.0 or later**
 - **Dr. Sonja Billerbeck** — Department of Bioengineering,
   Imperial College London. ORCID: [0000-0002-3092-578X](https://orcid.org/0000-0002-3092-578X)
 
-Correspondence:(mailto:t.reid25@imperial.ac.uk, s.billerbeck@imperial.ac.uk)
+Correspondence: t.reid25@imperial.ac.uk, s.billerbeck@imperial.ac.uk
