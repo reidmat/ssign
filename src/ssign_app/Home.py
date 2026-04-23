@@ -1656,14 +1656,12 @@ with tab_run:
                     blastp_min_qcov=float(st.session_state.get("blastp_qcov", 80)),
                     blastp_evalue=float(st.session_state.get("blastp_evalue", 1e-5)),
                     skip_hhsuite=not st.session_state.get("run_hh", False),
-                    hhsuite_mode="remote",
                     hhsuite_pfam_db="",
                     hhsuite_pdb70_db="",
                     hhpred_min_probability=float(
                         st.session_state.get("hhpred_min_prob", 40)
                     ),
                     skip_interproscan=not st.session_state.get("run_iprs", True),
-                    interproscan_mode="remote",
                     interproscan_db="",
                     skip_plmblast=not st.session_state.get("run_plm", False),
                     plmblast_db=st.session_state.get("plm_db", ""),

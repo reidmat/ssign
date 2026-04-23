@@ -73,14 +73,12 @@ class PipelineConfig:
     blastp_evalue: float = 1e-5
 
     skip_hhsuite: bool = True
-    hhsuite_mode: str = "remote"
     hhsuite_pfam_db: str = ""
     hhsuite_pdb70_db: str = ""
     hhsuite_uniclust_db: str = ""
     hhpred_min_probability: float = 40.0  # HHpred/Pfam min probability to keep hit
 
     skip_interproscan: bool = False
-    interproscan_mode: str = "remote"
     interproscan_db: str = ""
     interproscan_min_evalue: float = 1e-5
 
@@ -1145,11 +1143,24 @@ class PipelineRunner:
         err = self._check_substrates_exist("hhsuite")
         if err:
             return err
-        output = self._wf(f"{self.config.sample_id}_hhsuite.csv")
 
+        if not self.config.hhsuite_uniclust_db:
+            return StepResult(
+                "hhsuite",
+                False,
+                "HH-suite requires a local UniRef30/UniClust30 database for hhblits. "
+                "Set `hhsuite_uniclust_db` in the config.",
+            )
+        if not self.config.hhsuite_pfam_db and not self.config.hhsuite_pdb70_db:
+            return StepResult(
+                "hhsuite",
+                False,
+                "HH-suite requires at least one of `hhsuite_pfam_db` or "
+                "`hhsuite_pdb70_db` to be set.",
+            )
+
+        output = self._wf(f"{self.config.sample_id}_hhsuite.csv")
         args = [
-            "--mode",
-            self.config.hhsuite_mode,
             "--substrates",
             self.files.get("substrates_filtered", ""),
             "--proteins",
@@ -1158,24 +1169,15 @@ class PipelineRunner:
             self.config.sample_id,
             "--output",
             output,
+            "--uniclust-db",
+            self.config.hhsuite_uniclust_db,
         ]
-        if self.config.hhsuite_mode == "local":
-            if self.config.hhsuite_pfam_db:
-                args.extend(["--pfam-db", self.config.hhsuite_pfam_db])
-            if self.config.hhsuite_pdb70_db:
-                args.extend(["--pdb70-db", self.config.hhsuite_pdb70_db])
-            if self.config.hhsuite_uniclust_db:
-                args.extend(["--uniclust-db", self.config.hhsuite_uniclust_db])
+        if self.config.hhsuite_pfam_db:
+            args.extend(["--pfam-db", self.config.hhsuite_pfam_db])
+        if self.config.hhsuite_pdb70_db:
+            args.extend(["--pdb70-db", self.config.hhsuite_pdb70_db])
 
-        # HHpred: strict 200 jobs/hour limit — only 1 genome at a time
-        sem = self.api_sem.get("mpi")
-        if sem:
-            sem.acquire()
-        try:
-            rc, stdout, stderr = run_script("run_hhsuite.py", args, timeout=14400)
-        finally:
-            if sem:
-                sem.release()
+        rc, stdout, stderr = run_script("run_hhsuite.py", args, timeout=14400)
         if rc == 0:
             self.files["hhsuite"] = output
             return StepResult("hhsuite", True, "HH-suite complete")
@@ -1188,8 +1190,6 @@ class PipelineRunner:
         output = self._wf(f"{self.config.sample_id}_interproscan.csv")
 
         args = [
-            "--mode",
-            self.config.interproscan_mode,
             "--substrates",
             self.files.get("substrates_filtered", ""),
             "--proteins",
@@ -1199,17 +1199,10 @@ class PipelineRunner:
             "--output",
             output,
         ]
-        if self.config.interproscan_mode == "local" and self.config.interproscan_db:
+        if self.config.interproscan_db:
             args.extend(["--db", self.config.interproscan_db])
 
-        sem = self.api_sem.get("ebi")
-        if sem:
-            sem.acquire()
-        try:
-            rc, stdout, stderr = run_script("run_interproscan.py", args, timeout=7200)
-        finally:
-            if sem:
-                sem.release()
+        rc, stdout, stderr = run_script("run_interproscan.py", args, timeout=7200)
         if rc == 0:
             self.files["interproscan"] = output
             return StepResult("interproscan", True, "InterProScan complete")

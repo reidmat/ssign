@@ -53,7 +53,6 @@ def main():
         # Enable core annotation
         skip_blastp=False,
         skip_interproscan=False,
-        interproscan_mode="remote",
         skip_protparam=False,
         # DeepLocPro
         deeplocpro_mode="remote",

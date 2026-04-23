@@ -40,9 +40,7 @@ def run_genome(genome_path, sample_id, outdir, enable_hhpred=True):
         # Enable annotation tools
         skip_blastp=False,
         skip_hhsuite=not enable_hhpred,
-        hhsuite_mode="remote",
         skip_interproscan=False,
-        interproscan_mode="remote",
         skip_protparam=False,
         # DeepLocPro
         deeplocpro_mode="remote",

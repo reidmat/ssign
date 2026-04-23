@@ -1,5 +1,5 @@
 /*
- * INTERPROSCAN — domain annotation (local or EBI REST API)
+ * INTERPROSCAN — local domain annotation via interproscan.sh.
  */
 
 process INTERPROSCAN_LOCAL {
@@ -15,32 +15,10 @@ process INTERPROSCAN_LOCAL {
     script:
     """
     run_interproscan.py \\
-        --mode local \\
         --substrates ${substrates} \\
         --proteins ${proteins} \\
         --sample ${sample_id} \\
         --db "${params.interproscan_db}" \\
-        --output ${sample_id}_interproscan.csv
-    """
-}
-
-process INTERPROSCAN_REMOTE {
-    tag "$sample_id"
-    label 'process_network'
-
-    input:
-    tuple val(sample_id), path(substrates), path(proteins)
-
-    output:
-    tuple val(sample_id), val('interproscan'), path("${sample_id}_interproscan.csv"), emit: annotations
-
-    script:
-    """
-    run_interproscan.py \\
-        --mode remote \\
-        --substrates ${substrates} \\
-        --proteins ${proteins} \\
-        --sample ${sample_id} \\
         --output ${sample_id}_interproscan.csv
     """
 }

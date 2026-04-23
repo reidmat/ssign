@@ -2,14 +2,12 @@
  * Phase 5: Optional Annotation
  *
  * All tools are independently skippable.
- * Each database tool supports local and remote modes.
+ * All database tools run locally as of v1.0.0 (offline-first).
  */
 
 include { BLASTP_LOCAL }     from '../modules/local/blastp'
 include { HHSUITE_LOCAL }    from '../modules/local/hhsuite'
-include { HHSUITE_REMOTE }   from '../modules/local/hhsuite'
 include { INTERPROSCAN_LOCAL }  from '../modules/local/interproscan'
-include { INTERPROSCAN_REMOTE } from '../modules/local/interproscan'
 include { PROTPARAM }        from '../modules/local/protparam'
 
 workflow OPTIONAL_ANNOTATION {
@@ -27,26 +25,16 @@ workflow OPTIONAL_ANNOTATION {
         ch_annotations = ch_annotations.mix(BLASTP_LOCAL.out.annotations)
     }
 
-    // --- HH-suite ---
+    // --- HH-suite (local only as of v1.0.0) ---
     if (!params.skip_hhsuite) {
-        if (params.hhsuite_mode == 'local') {
-            HHSUITE_LOCAL(ch_substrates.join(ch_proteins))
-            ch_annotations = ch_annotations.mix(HHSUITE_LOCAL.out.annotations)
-        } else {
-            HHSUITE_REMOTE(ch_substrates.join(ch_proteins))
-            ch_annotations = ch_annotations.mix(HHSUITE_REMOTE.out.annotations)
-        }
+        HHSUITE_LOCAL(ch_substrates.join(ch_proteins))
+        ch_annotations = ch_annotations.mix(HHSUITE_LOCAL.out.annotations)
     }
 
-    // --- InterProScan ---
+    // --- InterProScan (local only as of v1.0.0) ---
     if (!params.skip_interproscan) {
-        if (params.interproscan_mode == 'local') {
-            INTERPROSCAN_LOCAL(ch_substrates.join(ch_proteins))
-            ch_annotations = ch_annotations.mix(INTERPROSCAN_LOCAL.out.annotations)
-        } else {
-            INTERPROSCAN_REMOTE(ch_substrates.join(ch_proteins))
-            ch_annotations = ch_annotations.mix(INTERPROSCAN_REMOTE.out.annotations)
-        }
+        INTERPROSCAN_LOCAL(ch_substrates.join(ch_proteins))
+        ch_annotations = ch_annotations.mix(INTERPROSCAN_LOCAL.out.annotations)
     }
 
     // --- ProtParam (always local, lightweight) ---

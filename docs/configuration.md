@@ -41,27 +41,25 @@
 
 ### Phase 5: Annotation Tools
 
-| Parameter                | Default  | Description                                      |
-| ------------------------ | -------- | ------------------------------------------------ |
-| `--skip_blastp`          | `false`  | Skip BLASTp                                      |
-| `--blastp_db`            | `null`   | Path to local BLAST database (required)          |
-| `--blastp_evalue`        | `1e-5`   | E-value threshold                                |
-| `--blastp_min_pident`    | `80`     | Minimum percent identity                         |
-| `--blastp_min_qcov`      | `80`     | Minimum query coverage                           |
-| `--blastp_exclude_taxid` | `null`   | Taxonomy ID to exclude (query organism)          |
-| `--skip_hhsuite`         | `true`   | Skip HH-suite (off by default — needs large DBs) |
-| `--hhsuite_mode`         | `remote` | `local` or `remote`                              |
-| `--hhsuite_pfam_db`      | `null`   | Pfam-A database path                             |
-| `--hhsuite_pdb70_db`     | `null`   | PDB70 database path                              |
-| `--hhsuite_uniclust_db`  | `null`   | UniClust30 database path                         |
-| `--skip_interproscan`    | `false`  | Skip InterProScan                                |
-| `--interproscan_mode`    | `remote` | `local` or `remote`                              |
-| `--interproscan_db`      | `null`   | InterProScan install path                        |
-| `--skip_plmblast`        | `true`   | Skip pLM-BLAST (off by default)                  |
-| `--plmblast_ecod_db`     | `null`   | ECOD70 database path                             |
-| `--skip_protparam`       | `false`  | Skip ProtParam                                   |
-| `--skip_structure`       | `false`  | Skip structure prediction                        |
-| `--plddt_threshold`      | `70`     | Minimum mean pLDDT for structure acceptance      |
+| Parameter                | Default | Description                                      |
+| ------------------------ | ------- | ------------------------------------------------ |
+| `--skip_blastp`          | `false` | Skip BLASTp                                      |
+| `--blastp_db`            | `null`  | Path to local BLAST database (required)          |
+| `--blastp_evalue`        | `1e-5`  | E-value threshold                                |
+| `--blastp_min_pident`    | `80`    | Minimum percent identity                         |
+| `--blastp_min_qcov`      | `80`    | Minimum query coverage                           |
+| `--blastp_exclude_taxid` | `null`  | Taxonomy ID to exclude (query organism)          |
+| `--skip_hhsuite`         | `true`  | Skip HH-suite (off by default — needs large DBs) |
+| `--hhsuite_pfam_db`      | `null`  | Pfam-A database path                             |
+| `--hhsuite_pdb70_db`     | `null`  | PDB70 database path                              |
+| `--hhsuite_uniclust_db`  | `null`  | UniClust30 database path                         |
+| `--skip_interproscan`    | `false` | Skip InterProScan                                |
+| `--interproscan_db`      | `null`  | InterProScan install path                        |
+| `--skip_plmblast`        | `true`  | Skip pLM-BLAST (off by default)                  |
+| `--plmblast_ecod_db`     | `null`  | ECOD70 database path                             |
+| `--skip_protparam`       | `false` | Skip ProtParam                                   |
+| `--skip_structure`       | `false` | Skip structure prediction                        |
+| `--plddt_threshold`      | `70`    | Minimum mean pLDDT for structure acceptance      |
 
 ### Phase 6: Reporting
 
