@@ -418,9 +418,6 @@ with st.sidebar:
             "**InterProScan 5:** Jones, P., et al. (2014). InterProScan 5: genome-scale "
             "protein function classification. *Bioinformatics*, 30(9), 1236-1240. "
             "doi:10.1093/bioinformatics/btu031\n\n"
-            "**Foldseek:** van Kempen, M., et al. (2024). Fast and accurate protein "
-            "structure search with Foldseek. *Nature Biotechnology*, 42(2), 243-246. "
-            "doi:10.1038/s41587-023-01773-0\n\n"
             "**Pyrodigal:** Larralde, M. (2022). Pyrodigal: Python bindings and "
             "interface to Prodigal, an efficient method for gene prediction in "
             "prokaryotes. *Journal of Open Source Software*, 7(72), 4296. "
@@ -1280,16 +1277,6 @@ with tab_pipeline:
 
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
-            st.checkbox("Foldseek", value=False, key="run_fs", disabled=True)
-        with col_info:
-            st.caption(
-                "Structural homology search. Requires pre-computed 3D structures "
-                "(e.g. from AlphaFold DB or ESMFold) and a local Foldseek database "
-                "(~10 GB). Available in ssign-power."
-            )
-
-        col_check, col_info = st.columns([1.5, 3.5])
-        with col_check:
             st.checkbox("pLM-BLAST (ECOD70)", value=False, key="run_plm", disabled=True)
         with col_info:
             st.caption(
@@ -1679,8 +1666,6 @@ with tab_run:
                     skip_interproscan=not st.session_state.get("run_iprs", True),
                     interproscan_mode="remote",
                     interproscan_db="",
-                    skip_foldseek=not st.session_state.get("run_fs", False),
-                    foldseek_db=st.session_state.get("fs_db", ""),
                     skip_plmblast=not st.session_state.get("run_plm", False),
                     plmblast_db=st.session_state.get("plm_db", ""),
                     skip_protparam=not st.session_state.get("run_pp", True),
@@ -1694,8 +1679,6 @@ with tab_run:
                     interproscan_evalue=float(
                         st.session_state.get("iprs_evalue", 1e-5)
                     ),
-                    foldseek_evalue=float(st.session_state.get("fs_evalue", 1e-3)),
-                    foldseek_min_tmscore=float(st.session_state.get("fs_tmscore", 0.5)),
                     deepsece_min_prob=float(st.session_state.get("dse_min_prob", 0.8)),
                     signalp_min_prob=float(st.session_state.get("sp_min_prob", 0.5)),
                     ortholog_min_pident=float(

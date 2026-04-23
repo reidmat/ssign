@@ -9,7 +9,6 @@ include { BLASTP_LOCAL }     from '../modules/local/blastp'
 include { BLASTP_REMOTE }    from '../modules/local/blastp'
 include { HHSUITE_LOCAL }    from '../modules/local/hhsuite'
 include { HHSUITE_REMOTE }   from '../modules/local/hhsuite'
-include { FOLDSEEK_LOCAL }   from '../modules/local/foldseek'
 include { INTERPROSCAN_LOCAL }  from '../modules/local/interproscan'
 include { INTERPROSCAN_REMOTE } from '../modules/local/interproscan'
 include { PROTPARAM }        from '../modules/local/protparam'
@@ -43,12 +42,6 @@ workflow OPTIONAL_ANNOTATION {
             HHSUITE_REMOTE(ch_substrates.join(ch_proteins))
             ch_annotations = ch_annotations.mix(HHSUITE_REMOTE.out.annotations)
         }
-    }
-
-    // --- Foldseek ---
-    if (!params.skip_foldseek) {
-        FOLDSEEK_LOCAL(ch_substrates.join(ch_proteins))
-        ch_annotations = ch_annotations.mix(FOLDSEEK_LOCAL.out.annotations)
     }
 
     // --- InterProScan ---

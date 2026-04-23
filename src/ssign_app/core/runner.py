@@ -32,6 +32,7 @@ BIN_DIR = _PACKAGE_SCRIPTS if _PACKAGE_SCRIPTS.exists() else _DEV_BIN
 @dataclass
 class PipelineConfig:
     """All configuration for a pipeline run."""
+
     # Input
     input_path: str = ""
     original_filename: str = ""  # Original filename when input is a temp upload
@@ -48,8 +49,8 @@ class PipelineConfig:
     required_fraction_correct: float = 0.8
 
     # Phase 1: ORF prediction options (for FASTA contigs input)
-    run_bakta: bool = False     # Use Bakta instead of Prodigal for ORF prediction
-    bakta_db: str = ""          # Path to Bakta database (required if run_bakta=True)
+    run_bakta: bool = False  # Use Bakta instead of Prodigal for ORF prediction
+    bakta_db: str = ""  # Path to Bakta database (required if run_bakta=True)
     bakta_threads: int = 4
 
     # Phase 3: Tool paths (DTU licensed)
@@ -59,7 +60,7 @@ class PipelineConfig:
     signalp_path: str = ""
     skip_signalp: bool = False
     skip_deepsece: bool = False
-    dlp_whole_genome: bool = False   # Run on all proteins, not just neighborhood
+    dlp_whole_genome: bool = False  # Run on all proteins, not just neighborhood
     dse_whole_genome: bool = False
     sp_whole_genome: bool = False
 
@@ -84,9 +85,6 @@ class PipelineConfig:
     interproscan_db: str = ""
     interproscan_min_evalue: float = 1e-5
 
-    skip_foldseek: bool = True
-    foldseek_db: str = ""
-
     skip_plmblast: bool = True
     plmblast_db: str = ""
 
@@ -108,10 +106,6 @@ class PipelineConfig:
     # InterProScan threshold
     interproscan_evalue: float = 1e-5
 
-    # Foldseek thresholds
-    foldseek_evalue: float = 1e-3
-    foldseek_min_tmscore: float = 0.5
-
     # DeepSecE threshold
     deepsece_min_prob: float = 0.8
 
@@ -126,6 +120,7 @@ class PipelineConfig:
 @dataclass
 class StepResult:
     """Result of a pipeline step."""
+
     name: str
     success: bool
     message: str
@@ -143,7 +138,10 @@ def run_script(script_name: str, args: list, timeout: int = 7200) -> tuple:
 
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return (result.returncode, result.stdout, result.stderr)
     except subprocess.TimeoutExpired:
@@ -155,9 +153,12 @@ def run_script(script_name: str, args: list, timeout: int = 7200) -> tuple:
 class PipelineRunner:
     """Runs the ssign pipeline step by step with progress callbacks."""
 
-    def __init__(self, config: PipelineConfig,
-                 progress_callback: Optional[Callable] = None,
-                 api_semaphores: Optional[dict] = None):
+    def __init__(
+        self,
+        config: PipelineConfig,
+        progress_callback: Optional[Callable] = None,
+        api_semaphores: Optional[dict] = None,
+    ):
         self.config = config
         self.progress = progress_callback or (lambda step, pct, msg: None)
         self.results: list[StepResult] = []
@@ -257,8 +258,9 @@ class PipelineRunner:
             for w in dep_warnings:
                 logger.warning(f"Dependency check: {w}")
             self.progress(
-                "Dependency check", 0,
-                f"{len(dep_warnings)} warning(s) — see log for details"
+                "Dependency check",
+                0,
+                f"{len(dep_warnings)} warning(s) — see log for details",
             )
 
         # Create output directory
@@ -292,10 +294,12 @@ class PipelineRunner:
         ]
         if not self.config.skip_deepsece:
             prediction_steps.append(
-                ("Predicting secretion type (DeepSecE)", self._step_deepsece))
+                ("Predicting secretion type (DeepSecE)", self._step_deepsece)
+            )
         if not self.config.skip_signalp:
             prediction_steps.append(
-                ("Predicting signal peptides (SignalP)", self._step_signalp))
+                ("Predicting signal peptides (SignalP)", self._step_signalp)
+            )
 
         # Annotation tools (parallel group 2)
         # HHpred listed first so it starts immediately — it's the bottleneck
@@ -305,11 +309,11 @@ class PipelineRunner:
         if not self.config.skip_blastp:
             annotation_steps.append(("Running BLASTp", self._step_blastp))
         if not self.config.skip_interproscan:
-            annotation_steps.append(
-                ("Running InterProScan", self._step_interproscan))
+            annotation_steps.append(("Running InterProScan", self._step_interproscan))
         if not self.config.skip_protparam:
             annotation_steps.append(
-                ("Computing physicochemical properties", self._step_protparam))
+                ("Computing physicochemical properties", self._step_protparam)
+            )
 
         # Full pipeline as stages: each stage is either:
         #   ("name", func)         — single sequential step
@@ -342,10 +346,16 @@ class PipelineRunner:
                 all_steps.append(stage)
 
         CORE_STEPS = {
-            "detect_format", "extract_proteins", "macsyfinder",
-            "validate_systems", "extract_neighborhood",
-            "deeplocpro", "cross_validate",
-            "proximity", "t5ss", "filtering",
+            "detect_format",
+            "extract_proteins",
+            "macsyfinder",
+            "validate_systems",
+            "extract_neighborhood",
+            "deeplocpro",
+            "cross_validate",
+            "proximity",
+            "t5ss",
+            "filtering",
             "integrate",
         }
 
@@ -378,20 +388,32 @@ class PipelineRunner:
                 # Downstream steps (integrate, orthologs, enrichment, report,
                 # figures) must re-run if ANY upstream step ran, since their
                 # output depends on all upstream results
-                _downstream = {"integrate", "orthologs", "enrichment", "report", "figures"}
+                _downstream = {
+                    "integrate",
+                    "orthologs",
+                    "enrichment",
+                    "report",
+                    "figures",
+                }
                 _force_rerun = step_id in _downstream and any_step_ran
 
                 if step_id in skip_steps and not _force_rerun:
                     n_skipped += 1
                     pct = int(100 * step_counter / total)
-                    self.progress(name, pct, f"Skipped (already done) | {self._elapsed_str()} elapsed")
-                    self.results.append(StepResult(
-                        step_id, True, "Resumed (already completed)"))
+                    self.progress(
+                        name,
+                        pct,
+                        f"Skipped (already done) | {self._elapsed_str()} elapsed",
+                    )
+                    self.results.append(
+                        StepResult(step_id, True, "Resumed (already completed)")
+                    )
                     continue
 
                 if core_failed:
-                    self.results.append(StepResult(
-                        step_id, False, "Skipped (earlier core step failed)"))
+                    self.results.append(
+                        StepResult(step_id, False, "Skipped (earlier core step failed)")
+                    )
                     continue
 
                 steps_to_run.append((name, func, step_id, step_counter))
@@ -414,13 +436,10 @@ class PipelineRunner:
                     flush=True,
                 )
 
-                with ThreadPoolExecutor(
-                    max_workers=len(steps_to_run)
-                ) as executor:
+                with ThreadPoolExecutor(max_workers=len(steps_to_run)) as executor:
                     futures = {}
                     for name, func, step_id, sc in steps_to_run:
-                        futures[executor.submit(func)] = (
-                            name, step_id, sc)
+                        futures[executor.submit(func)] = (name, step_id, sc)
 
                     for future in as_completed(futures):
                         name, step_id, sc = futures[future]
@@ -435,16 +454,13 @@ class PipelineRunner:
                             )
                             if result.success:
                                 self.progress(
-                                    name, pct,
-                                    f"Done: {result.message} | {self._elapsed_str()} elapsed")
-                            else:
-                                self.progress(
-                                    name, pct,
-                                    f"Failed: {result.message}")
-                                logger.error(
-                                    f"Step '{name}' failed: "
-                                    f"{result.message}"
+                                    name,
+                                    pct,
+                                    f"Done: {result.message} | {self._elapsed_str()} elapsed",
                                 )
+                            else:
+                                self.progress(name, pct, f"Failed: {result.message}")
+                                logger.error(f"Step '{name}' failed: {result.message}")
                                 if step_id in CORE_STEPS:
                                     core_failed = True
                         except Exception as e:
@@ -453,10 +469,8 @@ class PipelineRunner:
                                 f"{name} -> {e}",
                                 flush=True,
                             )
-                            self.results.append(
-                                StepResult(step_id, False, str(e)))
-                            logger.exception(
-                                f"Step '{name}' raised exception")
+                            self.results.append(StepResult(step_id, False, str(e)))
+                            logger.exception(f"Step '{name}' raised exception")
                             if step_id in CORE_STEPS:
                                 core_failed = True
 
@@ -465,7 +479,9 @@ class PipelineRunner:
                 # Sequential execution (single step or single-element group)
                 for name, func, step_id, sc in steps_to_run:
                     pct = int(100 * sc / total)
-                    self.progress(name, pct, f"Step {sc}/{total} | {self._elapsed_str()} elapsed")
+                    self.progress(
+                        name, pct, f"Step {sc}/{total} | {self._elapsed_str()} elapsed"
+                    )
                     print(
                         f"[ssign] [{self.config.sample_id}] Starting step {sc}/{total}: "
                         f"{name} ({step_id})",
@@ -484,15 +500,13 @@ class PipelineRunner:
                         )
                         if result.success:
                             self.progress(
-                                name, pct,
-                                f"Done: {result.message} | {self._elapsed_str()} elapsed")
+                                name,
+                                pct,
+                                f"Done: {result.message} | {self._elapsed_str()} elapsed",
+                            )
                         else:
-                            self.progress(
-                                name, pct,
-                                f"Failed: {result.message}")
-                            logger.error(
-                                f"Step '{name}' failed: "
-                                f"{result.message}")
+                            self.progress(name, pct, f"Failed: {result.message}")
+                            logger.error(f"Step '{name}' failed: {result.message}")
                             if step_id in CORE_STEPS:
                                 core_failed = True
                     except Exception as e:
@@ -501,11 +515,9 @@ class PipelineRunner:
                             f"{name} -> {e}",
                             flush=True,
                         )
-                        self.results.append(
-                            StepResult(step_id, False, str(e)))
+                        self.results.append(StepResult(step_id, False, str(e)))
                         self._save_progress()
-                        logger.exception(
-                            f"Step '{name}' raised exception")
+                        logger.exception(f"Step '{name}' raised exception")
                         if step_id in CORE_STEPS:
                             core_failed = True
 
@@ -527,77 +539,111 @@ class PipelineRunner:
     # ── Phase 1: Input Processing ──
 
     def _step_detect_format(self) -> StepResult:
-        rc, stdout, stderr = run_script("detect_input_format.py", [
-            self.config.input_path,
-        ])
+        rc, stdout, stderr = run_script(
+            "detect_input_format.py",
+            [
+                self.config.input_path,
+            ],
+        )
         if rc == 0:
             fmt = stdout.strip()
-            self.files['format'] = fmt
-            self.files['input'] = self.config.input_path
+            self.files["format"] = fmt
+            self.files["input"] = self.config.input_path
             return StepResult("detect_format", True, f"Format: {fmt}")
         return StepResult("detect_format", False, stderr[:500])
 
     def _step_extract_proteins(self) -> StepResult:
         proteins_path = self._wf(f"{self.config.sample_id}_proteins.faa")
         gene_info_path = self._wf(f"{self.config.sample_id}_gene_info.tsv")
-        fmt = self.files.get('format', '')
+        fmt = self.files.get("format", "")
 
-        if fmt == 'fasta_contigs' and self.config.run_bakta:
+        if fmt == "fasta_contigs" and self.config.run_bakta:
             # Use Bakta for richer annotation of raw contig FASTA
             if not self.config.bakta_db:
-                return StepResult("extract_proteins", False,
-                                  "Bakta mode requires --bakta-db path. "
-                                  "Download with: bakta_db download --output /path/to/db --type light")
-            rc, stdout, stderr = run_script("run_bakta.py", [
-                "--input", self.config.input_path,
-                "--db", self.config.bakta_db,
-                "--sample", self.config.sample_id,
-                "--threads", str(self.config.bakta_threads),
-                "--out-proteins", proteins_path,
-                "--out-gene-info", gene_info_path,
-            ], timeout=14400)
+                return StepResult(
+                    "extract_proteins",
+                    False,
+                    "Bakta mode requires --bakta-db path. "
+                    "Download with: bakta_db download --output /path/to/db --type light",
+                )
+            rc, stdout, stderr = run_script(
+                "run_bakta.py",
+                [
+                    "--input",
+                    self.config.input_path,
+                    "--db",
+                    self.config.bakta_db,
+                    "--sample",
+                    self.config.sample_id,
+                    "--threads",
+                    str(self.config.bakta_threads),
+                    "--out-proteins",
+                    proteins_path,
+                    "--out-gene-info",
+                    gene_info_path,
+                ],
+                timeout=14400,
+            )
             tool_name = "Bakta"
         else:
             # Handles GenBank, GFF3, and FASTA contigs (via Prodigal)
             metadata_path = self._wf(f"{self.config.sample_id}_metadata.json")
             extract_args = [
-                "--input", self.config.input_path,
-                "--sample", self.config.sample_id,
-                "--out-proteins", proteins_path,
-                "--out-gene-info", gene_info_path,
-                "--out-metadata", metadata_path,
+                "--input",
+                self.config.input_path,
+                "--sample",
+                self.config.sample_id,
+                "--out-proteins",
+                proteins_path,
+                "--out-gene-info",
+                gene_info_path,
+                "--out-metadata",
+                metadata_path,
             ]
             if self.config.original_filename:
-                extract_args.extend(["--original-filename", self.config.original_filename])
+                extract_args.extend(
+                    ["--original-filename", self.config.original_filename]
+                )
             rc, stdout, stderr = run_script("extract_proteins.py", extract_args)
-            tool_name = {"fasta_contigs": "Prodigal", "protein_fasta": "Protein FASTA"}.get(fmt, "GenBank parser")
+            tool_name = {
+                "fasta_contigs": "Prodigal",
+                "protein_fasta": "Protein FASTA",
+            }.get(fmt, "GenBank parser")
 
         if rc == 0:
-            self.files['proteins'] = proteins_path
-            self.files['gene_info'] = gene_info_path
+            self.files["proteins"] = proteins_path
+            self.files["gene_info"] = gene_info_path
 
             # Read organism name from metadata if available
             metadata_path = self._wf(f"{self.config.sample_id}_metadata.json")
             if os.path.exists(metadata_path):
                 try:
                     import json
+
                     with open(metadata_path) as mf:
                         meta = json.load(mf)
-                    self.files['organism'] = meta.get('organism', '')
+                    self.files["organism"] = meta.get("organism", "")
                 except Exception:
                     pass
 
             # Also extract gene order
             gene_order_path = self._wf(f"{self.config.sample_id}_gene_order.tsv")
-            rc2, _, stderr2 = run_script("extract_gene_order.py", [
-                "--gene-info", gene_info_path,
-                "--output", gene_order_path,
-            ])
+            rc2, _, stderr2 = run_script(
+                "extract_gene_order.py",
+                [
+                    "--gene-info",
+                    gene_info_path,
+                    "--output",
+                    gene_order_path,
+                ],
+            )
             if rc2 == 0:
-                self.files['gene_order'] = gene_order_path
+                self.files["gene_order"] = gene_order_path
 
-            n = sum(1 for line in open(proteins_path) if line.startswith('>'))
-            return StepResult("extract_proteins", True, f"{tool_name}: extracted {n} proteins")
+            n = sum(1 for line in open(proteins_path) if line.startswith(">"))
+            return StepResult(
+                "extract_proteins", True, f"{tool_name}: extracted {n} proteins"
+            )
         return StepResult("extract_proteins", False, stderr[:500])
 
     # ── Phase 2: SS Detection ──
@@ -609,9 +655,11 @@ class PipelineRunner:
         if os.path.exists(msf_out):
             shutil.rmtree(msf_out)
 
-        proteins = self.files.get('proteins', '')
+        proteins = self.files.get("proteins", "")
         if not proteins or not os.path.exists(proteins):
-            return StepResult("macsyfinder", False, "No proteins file from previous step")
+            return StepResult(
+                "macsyfinder", False, "No proteins file from previous step"
+            )
 
         # FRAGILE: macsydata install — downloads TXSScan HMM models from the
         # macsy-models GitHub repository. Can fail behind corporate firewalls
@@ -633,10 +681,11 @@ class PipelineRunner:
                 )
         except FileNotFoundError:
             return StepResult(
-                "macsyfinder", False,
+                "macsyfinder",
+                False,
                 "macsydata command not found.\n"
                 "  Install: pip install macsyfinder\n"
-                "  It should have been installed as a dependency of ssign."
+                "  It should have been installed as a dependency of ssign.",
             )
         except subprocess.TimeoutExpired:
             logger.warning(
@@ -653,47 +702,58 @@ class PipelineRunner:
         # If this breaks: sudo apt install hmmer (or: conda install -c bioconda hmmer)
         cmd = [
             "macsyfinder",
-            "--sequence-db", proteins,
-            "--db-type", "ordered_replicon",
-            "--models", "TXSScan", "all",
-            "--out-dir", msf_out,
+            "--sequence-db",
+            proteins,
+            "--db-type",
+            "ordered_replicon",
+            "--models",
+            "TXSScan",
+            "all",
+            "--out-dir",
+            msf_out,
             "--mute",
         ]
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=3600,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3600,
             )
             if result.returncode == 0:
-                self.files['macsyfinder_out'] = msf_out
+                self.files["macsyfinder_out"] = msf_out
                 return StepResult("macsyfinder", True, "MacSyFinder v2 complete")
 
             error_msg = result.stderr[:500]
             # Detect common MacSyFinder failures and provide specific advice
             if "hmmsearch" in error_msg.lower() or "hmmer" in error_msg.lower():
                 return StepResult(
-                    "macsyfinder", False,
-                    f"MacSyFinder failed — hmmsearch not available.\n"
-                    f"  The pyhmmer shim should provide this automatically.\n"
-                    f"  How to fix:\n"
-                    f"    - pip install --force-reinstall ssign\n"
-                    f"    - Or install real HMMER: sudo apt install hmmer"
+                    "macsyfinder",
+                    False,
+                    "MacSyFinder failed — hmmsearch not available.\n"
+                    "  The pyhmmer shim should provide this automatically.\n"
+                    "  How to fix:\n"
+                    "    - pip install --force-reinstall ssign\n"
+                    "    - Or install real HMMER: sudo apt install hmmer",
                 )
             if "txscan" in error_msg.lower() or "model" in error_msg.lower():
                 return StepResult(
-                    "macsyfinder", False,
+                    "macsyfinder",
+                    False,
                     f"MacSyFinder failed — TXSScan models may not be "
                     f"installed.\n"
                     f"  Run: macsydata install --user TXSScan\n"
-                    f"  Original error: {error_msg}"
+                    f"  Original error: {error_msg}",
                 )
             return StepResult("macsyfinder", False, error_msg)
         except FileNotFoundError:
             return StepResult(
-                "macsyfinder", False,
+                "macsyfinder",
+                False,
                 "macsyfinder command not found.\n"
                 "  Install: pip install macsyfinder\n"
-                "  It should have been installed as a dependency of ssign."
+                "  It should have been installed as a dependency of ssign.",
             )
         except subprocess.TimeoutExpired:
             return StepResult("macsyfinder", False, "Timeout after 60 min")
@@ -702,55 +762,79 @@ class PipelineRunner:
 
     def _step_validate_systems(self) -> StepResult:
         """Validate MacSyFinder results and extract SS components."""
-        msf_out = self.files.get('macsyfinder_out', '')
-        gene_info = self.files.get('gene_info', '')
+        msf_out = self.files.get("macsyfinder_out", "")
+        gene_info = self.files.get("gene_info", "")
         components_path = self._wf(f"{self.config.sample_id}_ss_components.tsv")
         systems_path = self._wf(f"{self.config.sample_id}_valid_systems.tsv")
 
         if not msf_out or not os.path.isdir(msf_out):
-            return StepResult("validate_systems", False, "No MacSyFinder output from previous step")
+            return StepResult(
+                "validate_systems", False, "No MacSyFinder output from previous step"
+            )
 
-        rc, stdout, stderr = run_script("validate_macsyfinder_systems.py", [
-            "--msf-dir", msf_out,
-            "--gene-info", gene_info,
-            "--sample", self.config.sample_id,
-            "--wholeness-threshold", str(self.config.wholeness_threshold),
-            "--excluded-systems", ",".join(self.config.excluded_systems),
-            "--out-components", components_path,
-            "--out-systems", systems_path,
-        ])
+        rc, stdout, stderr = run_script(
+            "validate_macsyfinder_systems.py",
+            [
+                "--msf-dir",
+                msf_out,
+                "--gene-info",
+                gene_info,
+                "--sample",
+                self.config.sample_id,
+                "--wholeness-threshold",
+                str(self.config.wholeness_threshold),
+                "--excluded-systems",
+                ",".join(self.config.excluded_systems),
+                "--out-components",
+                components_path,
+                "--out-systems",
+                systems_path,
+            ],
+        )
 
         if rc == 0:
-            self.files['ss_components'] = components_path
-            self.files['valid_systems'] = systems_path
+            self.files["ss_components"] = components_path
+            self.files["valid_systems"] = systems_path
             return StepResult("validate_systems", True, "Systems validated")
         return StepResult("validate_systems", False, stderr[:500])
 
     def _step_extract_neighborhood(self) -> StepResult:
         """Extract proteins near SS components for focused prediction."""
-        gene_order = self.files.get('gene_order', '')
-        ss_components = self.files.get('ss_components', '')
-        proteins = self.files.get('proteins', '')
+        gene_order = self.files.get("gene_order", "")
+        ss_components = self.files.get("ss_components", "")
+        proteins = self.files.get("proteins", "")
 
         if not ss_components or not os.path.exists(ss_components):
-            return StepResult("extract_neighborhood", False,
-                              "No SS components from previous step")
+            return StepResult(
+                "extract_neighborhood", False, "No SS components from previous step"
+            )
 
         neighborhood_fasta = self._wf(f"{self.config.sample_id}_neighborhood.faa")
 
-        rc, stdout, stderr = run_script("extract_neighborhood.py", [
-            "--gene-order", gene_order,
-            "--ss-components", ss_components,
-            "--proteins", proteins,
-            "--window", str(self.config.proximity_window),
-            "--output", neighborhood_fasta,
-        ])
+        rc, stdout, stderr = run_script(
+            "extract_neighborhood.py",
+            [
+                "--gene-order",
+                gene_order,
+                "--ss-components",
+                ss_components,
+                "--proteins",
+                proteins,
+                "--window",
+                str(self.config.proximity_window),
+                "--output",
+                neighborhood_fasta,
+            ],
+        )
 
         if rc == 0:
-            self.files['neighborhood_proteins'] = neighborhood_fasta
-            n_neigh = sum(1 for line in open(neighborhood_fasta) if line.startswith('>'))
-            return StepResult("extract_neighborhood", True,
-                              f"{n_neigh} neighborhood proteins")
+            self.files["neighborhood_proteins"] = neighborhood_fasta
+            n_neigh = sum(
+                1 for line in open(neighborhood_fasta) if line.startswith(">")
+            )
+            return StepResult(
+                "extract_neighborhood", True, f"{n_neigh} neighborhood proteins"
+            )
         return StepResult("extract_neighborhood", False, stderr[:500])
 
     # ── Phase 3: Prediction ──
@@ -760,24 +844,31 @@ class PipelineRunner:
 
         # Use neighborhood proteins (focused) unless whole-genome mode is on
         if self.config.dlp_whole_genome:
-            input_proteins = self.files.get('proteins', '')
+            input_proteins = self.files.get("proteins", "")
         else:
-            input_proteins = self.files.get('neighborhood_proteins',
-                                             self.files.get('proteins', ''))
+            input_proteins = self.files.get(
+                "neighborhood_proteins", self.files.get("proteins", "")
+            )
 
         args = [
-            "--input", input_proteins,
-            "--sample", self.config.sample_id,
-            "--conf-threshold", str(self.config.conf_threshold),
-            "--output", output,
+            "--input",
+            input_proteins,
+            "--sample",
+            self.config.sample_id,
+            "--conf-threshold",
+            str(self.config.conf_threshold),
+            "--output",
+            output,
         ]
 
         if self.config.deeplocpro_mode == "local" and self.config.deeplocpro_path:
-            args.extend(["--mode", "local", "--deeplocpro-path", self.config.deeplocpro_path])
+            args.extend(
+                ["--mode", "local", "--deeplocpro-path", self.config.deeplocpro_path]
+            )
         else:
             args.extend(["--mode", "remote"])
 
-        sem = self.api_sem.get('dtu')
+        sem = self.api_sem.get("dtu")
         if sem:
             sem.acquire()
         try:
@@ -786,7 +877,7 @@ class PipelineRunner:
             if sem:
                 sem.release()
         if rc == 0:
-            self.files['deeplocpro'] = output
+            self.files["deeplocpro"] = output
             return StepResult("deeplocpro", True, "DeepLocPro complete")
         return StepResult("deeplocpro", False, stderr[:500])
 
@@ -794,19 +885,27 @@ class PipelineRunner:
         output = self._wf(f"{self.config.sample_id}_deepsece.tsv")
 
         if self.config.dse_whole_genome:
-            input_proteins = self.files.get('proteins', '')
+            input_proteins = self.files.get("proteins", "")
         else:
-            input_proteins = self.files.get('neighborhood_proteins',
-                                             self.files.get('proteins', ''))
+            input_proteins = self.files.get(
+                "neighborhood_proteins", self.files.get("proteins", "")
+            )
 
-        rc, stdout, stderr = run_script("run_deepsece.py", [
-            "--input", input_proteins,
-            "--sample", self.config.sample_id,
-            "--output", output,
-        ], timeout=14400)
+        rc, stdout, stderr = run_script(
+            "run_deepsece.py",
+            [
+                "--input",
+                input_proteins,
+                "--sample",
+                self.config.sample_id,
+                "--output",
+                output,
+            ],
+            timeout=14400,
+        )
 
         if rc == 0:
-            self.files['deepsece'] = output
+            self.files["deepsece"] = output
             return StepResult("deepsece", True, "DeepSecE complete")
         return StepResult("deepsece", False, stderr[:500])
 
@@ -814,22 +913,26 @@ class PipelineRunner:
         output = self._wf(f"{self.config.sample_id}_signalp.tsv")
 
         if self.config.sp_whole_genome:
-            input_proteins = self.files.get('proteins', '')
+            input_proteins = self.files.get("proteins", "")
         else:
-            input_proteins = self.files.get('neighborhood_proteins',
-                                             self.files.get('proteins', ''))
+            input_proteins = self.files.get(
+                "neighborhood_proteins", self.files.get("proteins", "")
+            )
 
         args = [
-            "--input", input_proteins,
-            "--sample", self.config.sample_id,
-            "--output", output,
+            "--input",
+            input_proteins,
+            "--sample",
+            self.config.sample_id,
+            "--output",
+            output,
         ]
         if self.config.signalp_mode == "local" and self.config.signalp_path:
             args.extend(["--mode", "local", "--signalp-path", self.config.signalp_path])
         else:
             args.extend(["--mode", "remote"])
 
-        sem = self.api_sem.get('dtu')
+        sem = self.api_sem.get("dtu")
         if sem:
             sem.acquire()
         try:
@@ -838,31 +941,39 @@ class PipelineRunner:
             if sem:
                 sem.release()
         if rc == 0:
-            self.files['signalp'] = output
+            self.files["signalp"] = output
             return StepResult("signalp", True, "SignalP complete")
         return StepResult("signalp", False, stderr[:500])
 
     def _step_cross_validate(self) -> StepResult:
         output = self._wf(f"{self.config.sample_id}_predictions.tsv")
 
-        dlp = self.files.get('deeplocpro', '')
+        dlp = self.files.get("deeplocpro", "")
         if not dlp or not os.path.exists(dlp):
-            return StepResult("cross_validate", False, "No DeepLocPro output from previous step")
+            return StepResult(
+                "cross_validate", False, "No DeepLocPro output from previous step"
+            )
 
-        dse = self.files.get('deepsece', '')
-        sp = self.files.get('signalp', '')
+        dse = self.files.get("deepsece", "")
+        sp = self.files.get("signalp", "")
 
-        valid_sys = self.files.get('valid_systems', '')
+        valid_sys = self.files.get("valid_systems", "")
         if not valid_sys or not os.path.exists(valid_sys):
-            return StepResult("cross_validate", False,
-                              "No valid_systems file from previous step")
+            return StepResult(
+                "cross_validate", False, "No valid_systems file from previous step"
+            )
 
         args = [
-            "--deeplocpro", dlp,
-            "--valid-systems", valid_sys,
-            "--sample", self.config.sample_id,
-            "--conf-threshold", str(self.config.conf_threshold),
-            "--output", output,
+            "--deeplocpro",
+            dlp,
+            "--valid-systems",
+            valid_sys,
+            "--sample",
+            self.config.sample_id,
+            "--conf-threshold",
+            str(self.config.conf_threshold),
+            "--output",
+            output,
         ]
         if dse and os.path.exists(dse):
             args.extend(["--deepsece", dse])
@@ -871,7 +982,7 @@ class PipelineRunner:
 
         rc, stdout, stderr = run_script("cross_validate_predictions.py", args)
         if rc == 0:
-            self.files['predictions'] = output
+            self.files["predictions"] = output
             return StepResult("cross_validate", True, "Predictions validated")
         return StepResult("cross_validate", False, stderr[:500])
 
@@ -880,18 +991,28 @@ class PipelineRunner:
     def _step_proximity(self) -> StepResult:
         output = self._wf(f"{self.config.sample_id}_substrates.tsv")
 
-        rc, stdout, stderr = run_script("proximity_analysis.py", [
-            "--gene-order", self.files.get('gene_order', ''),
-            "--ss-components", self.files.get('ss_components', ''),
-            "--predictions", self.files.get('predictions', ''),
-            "--sample", self.config.sample_id,
-            "--window", str(self.config.proximity_window),
-            "--conf-threshold", str(self.config.conf_threshold),
-            "--output", output,
-        ])
+        rc, stdout, stderr = run_script(
+            "proximity_analysis.py",
+            [
+                "--gene-order",
+                self.files.get("gene_order", ""),
+                "--ss-components",
+                self.files.get("ss_components", ""),
+                "--predictions",
+                self.files.get("predictions", ""),
+                "--sample",
+                self.config.sample_id,
+                "--window",
+                str(self.config.proximity_window),
+                "--conf-threshold",
+                str(self.config.conf_threshold),
+                "--output",
+                output,
+            ],
+        )
 
         if rc == 0:
-            self.files['substrates'] = output
+            self.files["substrates"] = output
             n = sum(1 for _ in open(output)) - 1  # minus header
             return StepResult("proximity", True, f"Found {n} substrate candidates")
         return StepResult("proximity", False, stderr[:500])
@@ -900,16 +1021,24 @@ class PipelineRunner:
         out_sub = self._wf(f"{self.config.sample_id}_t5ss_substrates.tsv")
         out_dom = self._wf(f"{self.config.sample_id}_t5ss_domains.tsv")
 
-        rc, stdout, stderr = run_script("t5ss_handler.py", [
-            "--ss-components", self.files.get('ss_components', ''),
-            "--predictions", self.files.get('predictions', ''),
-            "--sample", self.config.sample_id,
-            "--out-substrates", out_sub,
-            "--out-domains", out_dom,
-        ])
+        rc, stdout, stderr = run_script(
+            "t5ss_handler.py",
+            [
+                "--ss-components",
+                self.files.get("ss_components", ""),
+                "--predictions",
+                self.files.get("predictions", ""),
+                "--sample",
+                self.config.sample_id,
+                "--out-substrates",
+                out_sub,
+                "--out-domains",
+                out_dom,
+            ],
+        )
 
         if rc == 0:
-            self.files['t5ss_substrates'] = out_sub
+            self.files["t5ss_substrates"] = out_sub
             return StepResult("t5ss", True, "T5SS handled")
         return StepResult("t5ss", False, stderr[:500])
 
@@ -917,20 +1046,28 @@ class PipelineRunner:
         out_filtered = self._wf(f"{self.config.sample_id}_substrates_filtered.tsv")
         out_all = self._wf(f"{self.config.sample_id}_substrates_all.tsv")
 
-        substrates = self.files.get('substrates', '')
-        t5ss = self.files.get('t5ss_substrates', '')
+        substrates = self.files.get("substrates", "")
+        t5ss = self.files.get("t5ss_substrates", "")
         if not substrates or not os.path.exists(substrates):
             return StepResult("filtering", False, "No substrates from previous step")
 
         filter_args = [
-            "--proximity-substrates", substrates,
-            "--t5ss-substrates", t5ss if t5ss and os.path.exists(t5ss) else substrates,
-            "--valid-systems", self.files.get('valid_systems', ''),
-            "--predictions", self.files.get('predictions', ''),
-            "--sample", self.config.sample_id,
-            "--excluded-systems", ",".join(self.config.excluded_systems),
-            "--out-filtered", out_filtered,
-            "--out-all", out_all,
+            "--proximity-substrates",
+            substrates,
+            "--t5ss-substrates",
+            t5ss if t5ss and os.path.exists(t5ss) else substrates,
+            "--valid-systems",
+            self.files.get("valid_systems", ""),
+            "--predictions",
+            self.files.get("predictions", ""),
+            "--sample",
+            self.config.sample_id,
+            "--excluded-systems",
+            ",".join(self.config.excluded_systems),
+            "--out-filtered",
+            out_filtered,
+            "--out-all",
+            out_all,
         ]
         if self.config.filter_dse_type_mismatch:
             filter_args.append("--filter-dse-type-mismatch")
@@ -938,9 +1075,16 @@ class PipelineRunner:
         rc, stdout, stderr = run_script("system_filtering.py", filter_args)
 
         if rc == 0:
-            self.files['substrates_filtered'] = out_filtered
-            self.files['substrates_all'] = out_all
-            n_subs = sum(1 for line in open(out_filtered) if not line.startswith('locus_tag') and line.strip()) - 1
+            self.files["substrates_filtered"] = out_filtered
+            self.files["substrates_all"] = out_all
+            n_subs = (
+                sum(
+                    1
+                    for line in open(out_filtered)
+                    if not line.startswith("locus_tag") and line.strip()
+                )
+                - 1
+            )
             n_subs = max(0, n_subs)
             return StepResult("filtering", True, f"{n_subs} secreted proteins")
         return StepResult("filtering", False, stderr[:500])
@@ -949,9 +1093,11 @@ class PipelineRunner:
 
     def _check_substrates_exist(self, step_name):
         """Check that upstream substrate files exist. Returns error StepResult or None."""
-        sf = self.files.get('substrates_filtered', '')
+        sf = self.files.get("substrates_filtered", "")
         if not sf or not os.path.exists(sf):
-            return StepResult(step_name, False, "Skipped — no substrates from upstream steps")
+            return StepResult(
+                step_name, False, "Skipped — no substrates from upstream steps"
+            )
         return None
 
     def _step_blastp(self) -> StepResult:
@@ -962,21 +1108,29 @@ class PipelineRunner:
         output = self._wf(f"{self.config.sample_id}_blastp.csv")
 
         args = [
-            "--mode", self.config.blastp_mode,
-            "--substrates", self.files.get('substrates_filtered', ''),
-            "--proteins", self.files.get('proteins', ''),
-            "--sample", self.config.sample_id,
-            "--output", output,
-            "--min-pident", str(self.config.blastp_min_pident),
-            "--min-qcov", str(self.config.blastp_min_qcov),
-            "--evalue", str(self.config.blastp_evalue),
+            "--mode",
+            self.config.blastp_mode,
+            "--substrates",
+            self.files.get("substrates_filtered", ""),
+            "--proteins",
+            self.files.get("proteins", ""),
+            "--sample",
+            self.config.sample_id,
+            "--output",
+            output,
+            "--min-pident",
+            str(self.config.blastp_min_pident),
+            "--min-qcov",
+            str(self.config.blastp_min_qcov),
+            "--evalue",
+            str(self.config.blastp_evalue),
         ]
         if self.config.blastp_mode == "local" and self.config.blastp_db:
             args.extend(["--db", self.config.blastp_db])
         if self.config.blastp_exclude_taxid:
             args.extend(["--exclude-taxid", self.config.blastp_exclude_taxid])
 
-        sem = self.api_sem.get('ncbi')
+        sem = self.api_sem.get("ncbi")
         if sem:
             sem.acquire()
         try:
@@ -985,7 +1139,7 @@ class PipelineRunner:
             if sem:
                 sem.release()
         if rc == 0:
-            self.files['blastp'] = output
+            self.files["blastp"] = output
             return StepResult("blastp", True, "BLASTp complete")
         return StepResult("blastp", False, stderr[:500])
 
@@ -996,11 +1150,16 @@ class PipelineRunner:
         output = self._wf(f"{self.config.sample_id}_hhsuite.csv")
 
         args = [
-            "--mode", self.config.hhsuite_mode,
-            "--substrates", self.files.get('substrates_filtered', ''),
-            "--proteins", self.files.get('proteins', ''),
-            "--sample", self.config.sample_id,
-            "--output", output,
+            "--mode",
+            self.config.hhsuite_mode,
+            "--substrates",
+            self.files.get("substrates_filtered", ""),
+            "--proteins",
+            self.files.get("proteins", ""),
+            "--sample",
+            self.config.sample_id,
+            "--output",
+            output,
         ]
         if self.config.hhsuite_mode == "local":
             if self.config.hhsuite_pfam_db:
@@ -1011,7 +1170,7 @@ class PipelineRunner:
                 args.extend(["--uniclust-db", self.config.hhsuite_uniclust_db])
 
         # HHpred: strict 200 jobs/hour limit — only 1 genome at a time
-        sem = self.api_sem.get('mpi')
+        sem = self.api_sem.get("mpi")
         if sem:
             sem.acquire()
         try:
@@ -1020,7 +1179,7 @@ class PipelineRunner:
             if sem:
                 sem.release()
         if rc == 0:
-            self.files['hhsuite'] = output
+            self.files["hhsuite"] = output
             return StepResult("hhsuite", True, "HH-suite complete")
         return StepResult("hhsuite", False, stderr[:500])
 
@@ -1031,16 +1190,21 @@ class PipelineRunner:
         output = self._wf(f"{self.config.sample_id}_interproscan.csv")
 
         args = [
-            "--mode", self.config.interproscan_mode,
-            "--substrates", self.files.get('substrates_filtered', ''),
-            "--proteins", self.files.get('proteins', ''),
-            "--sample", self.config.sample_id,
-            "--output", output,
+            "--mode",
+            self.config.interproscan_mode,
+            "--substrates",
+            self.files.get("substrates_filtered", ""),
+            "--proteins",
+            self.files.get("proteins", ""),
+            "--sample",
+            self.config.sample_id,
+            "--output",
+            output,
         ]
         if self.config.interproscan_mode == "local" and self.config.interproscan_db:
             args.extend(["--db", self.config.interproscan_db])
 
-        sem = self.api_sem.get('ebi')
+        sem = self.api_sem.get("ebi")
         if sem:
             sem.acquire()
         try:
@@ -1049,7 +1213,7 @@ class PipelineRunner:
             if sem:
                 sem.release()
         if rc == 0:
-            self.files['interproscan'] = output
+            self.files["interproscan"] = output
             return StepResult("interproscan", True, "InterProScan complete")
         return StepResult("interproscan", False, stderr[:500])
 
@@ -1059,15 +1223,22 @@ class PipelineRunner:
             return err
         output = self._wf(f"{self.config.sample_id}_protparam.csv")
 
-        rc, stdout, stderr = run_script("compute_protparam.py", [
-            "--substrates", self.files.get('substrates_filtered', ''),
-            "--proteins", self.files.get('proteins', ''),
-            "--sample", self.config.sample_id,
-            "--output", output,
-        ])
+        rc, stdout, stderr = run_script(
+            "compute_protparam.py",
+            [
+                "--substrates",
+                self.files.get("substrates_filtered", ""),
+                "--proteins",
+                self.files.get("proteins", ""),
+                "--sample",
+                self.config.sample_id,
+                "--output",
+                output,
+            ],
+        )
 
         if rc == 0:
-            self.files['protparam'] = output
+            self.files["protparam"] = output
             return StepResult("protparam", True, "ProtParam complete")
         return StepResult("protparam", False, stderr[:500])
 
@@ -1079,20 +1250,24 @@ class PipelineRunner:
         # Annotation tools only (NOT SignalP — that's a prediction tool,
         # already included via cross_validate → substrates_filtered)
         annotation_files = []
-        for key in ['blastp', 'hhsuite', 'interproscan', 'protparam']:
+        for key in ["blastp", "hhsuite", "interproscan", "protparam"]:
             if key in self.files and os.path.exists(self.files[key]):
                 annotation_files.append(self.files[key])
 
         # Also pass gene_info for GBFF annotations
-        gene_info = self.files.get('gene_info', '')
+        gene_info = self.files.get("gene_info", "")
 
         args = [
-            "--substrates-filtered", self.files.get('substrates_filtered', ''),
-            "--substrates-all", self.files.get('substrates_all', ''),
-            "--sample", self.config.sample_id,
-            "--output", output,
+            "--substrates-filtered",
+            self.files.get("substrates_filtered", ""),
+            "--substrates-all",
+            self.files.get("substrates_all", ""),
+            "--sample",
+            self.config.sample_id,
+            "--output",
+            output,
         ]
-        proteins = self.files.get('proteins', '')
+        proteins = self.files.get("proteins", "")
         if gene_info and os.path.exists(gene_info):
             args.extend(["--gene-info", gene_info])
         if proteins and os.path.exists(proteins):
@@ -1102,14 +1277,14 @@ class PipelineRunner:
 
         rc, stdout, stderr = run_script("integrate_annotations.py", args)
         if rc == 0:
-            self.files['integrated'] = output
+            self.files["integrated"] = output
             return StepResult("integrate", True, "Annotations integrated")
         return StepResult("integrate", False, stderr[:500])
 
     def _step_orthologs(self) -> StepResult:
         """Assign ortholog groups via all-vs-all BLASTp + Union-Find clustering."""
-        sf = self.files.get('substrates_filtered', '')
-        proteins = self.files.get('proteins', '')
+        sf = self.files.get("substrates_filtered", "")
+        proteins = self.files.get("proteins", "")
 
         if not sf or not os.path.exists(sf):
             return StepResult("orthologs", True, "No substrates — skipping orthologs")
@@ -1117,85 +1292,112 @@ class PipelineRunner:
         # Count substrates
         n_sub = sum(1 for _ in open(sf)) - 1
         if n_sub < 2:
-            return StepResult("orthologs", True,
-                              f"Only {n_sub} substrate(s) — skipping ortholog grouping")
+            return StepResult(
+                "orthologs",
+                True,
+                f"Only {n_sub} substrate(s) — skipping ortholog grouping",
+            )
 
         # Extract substrate sequences into a dedicated FASTA
         substrate_fasta = self._wf(f"{self.config.sample_id}_substrates_for_ortho.faa")
         substrate_ids = set()
         with open(sf) as f:
-            reader = csv.DictReader(f, delimiter='\t')
+            reader = csv.DictReader(f, delimiter="\t")
             for row in reader:
-                lid = row.get('locus_tag', row.get('protein_id', ''))
+                lid = row.get("locus_tag", row.get("protein_id", ""))
                 if lid:
                     substrate_ids.add(lid)
 
         from Bio import SeqIO
+
         n_written = 0
-        with open(substrate_fasta, 'w') as out:
-            for rec in SeqIO.parse(proteins, 'fasta'):
+        with open(substrate_fasta, "w") as out:
+            for rec in SeqIO.parse(proteins, "fasta"):
                 if rec.id in substrate_ids:
-                    SeqIO.write(rec, out, 'fasta')
+                    SeqIO.write(rec, out, "fasta")
                     n_written += 1
 
         if n_written < 2:
-            return StepResult("orthologs", True,
-                              f"Only {n_written} substrate sequences — skipping")
+            return StepResult(
+                "orthologs", True, f"Only {n_written} substrate sequences — skipping"
+            )
 
         output = self._wf(f"{self.config.sample_id}_orthologs.csv")
         output_groups = self._wf(f"{self.config.sample_id}_ortholog_groups.csv")
 
-        rc, stdout, stderr = run_script("run_ortholog_grouping.py", [
-            "--substrates-fasta", substrate_fasta,
-            "--min-pident", str(self.config.ortholog_min_pident),
-            "--min-qcov", str(self.config.ortholog_min_qcov),
-            "--output", output,
-            "--output-groups", output_groups,
-        ], timeout=3600)
+        rc, stdout, stderr = run_script(
+            "run_ortholog_grouping.py",
+            [
+                "--substrates-fasta",
+                substrate_fasta,
+                "--min-pident",
+                str(self.config.ortholog_min_pident),
+                "--min-qcov",
+                str(self.config.ortholog_min_qcov),
+                "--output",
+                output,
+                "--output-groups",
+                output_groups,
+            ],
+            timeout=3600,
+        )
 
         if rc == 0:
-            self.files['orthologs'] = output
-            self.files['ortholog_groups'] = output_groups
+            self.files["orthologs"] = output
+            self.files["ortholog_groups"] = output_groups
 
             # Merge ortholog assignments into the integrated CSV
-            integrated = self.files.get('integrated', '')
+            integrated = self.files.get("integrated", "")
             if integrated and os.path.exists(integrated) and os.path.exists(output):
                 try:
                     import pandas as pd
+
                     df_int = pd.read_csv(integrated)
                     df_og = pd.read_csv(output)
                     # Merge on locus_tag
-                    df_merged = df_int.merge(df_og, on='locus_tag', how='left')
+                    df_merged = df_int.merge(df_og, on="locus_tag", how="left")
                     df_merged.to_csv(integrated, index=False)
                     logger.info(f"Merged ortholog groups into {integrated}")
                 except Exception as e:
-                    logger.warning(f"Could not merge orthologs into integrated CSV: {e}")
+                    logger.warning(
+                        f"Could not merge orthologs into integrated CSV: {e}"
+                    )
 
             return StepResult("orthologs", True, "Ortholog groups assigned")
         return StepResult("orthologs", False, stderr[:500])
 
     def _step_enrichment(self) -> StepResult:
         """Run enrichment testing (Fisher's exact + permutation)."""
-        integrated = self.files.get('integrated', '')
+        integrated = self.files.get("integrated", "")
         if not integrated or not os.path.exists(integrated):
-            return StepResult("enrichment", False, "No integrated CSV — skipping enrichment")
+            return StepResult(
+                "enrichment", False, "No integrated CSV — skipping enrichment"
+            )
 
         out_fisher = self._wf(f"{self.config.sample_id}_enrichment_fisher.csv")
         out_perm = self._wf(f"{self.config.sample_id}_enrichment_permutation.csv")
         out_summary = self._wf(f"{self.config.sample_id}_enrichment_summary.txt")
 
-        rc, stdout, stderr = run_script("enrichment_testing.py", [
-            "--integrated-csv", integrated,
-            "--n-permutations", "10000",
-            "--out-fisher", out_fisher,
-            "--out-permutation", out_perm,
-            "--out-summary", out_summary,
-        ])
+        rc, stdout, stderr = run_script(
+            "enrichment_testing.py",
+            [
+                "--integrated-csv",
+                integrated,
+                "--n-permutations",
+                "10000",
+                "--out-fisher",
+                out_fisher,
+                "--out-permutation",
+                out_perm,
+                "--out-summary",
+                out_summary,
+            ],
+        )
 
         if rc == 0:
-            self.files['enrichment_fisher'] = out_fisher
-            self.files['enrichment_perm'] = out_perm
-            self.files['enrichment_summary'] = out_summary
+            self.files["enrichment_fisher"] = out_fisher
+            self.files["enrichment_perm"] = out_perm
+            self.files["enrichment_summary"] = out_summary
             return StepResult("enrichment", True, "Enrichment analysis complete")
         return StepResult("enrichment", False, stderr[:500])
 
@@ -1203,15 +1405,21 @@ class PipelineRunner:
         html_out = self._wf(f"{self.config.sample_id}_report.html")
         txt_out = self._wf(f"{self.config.sample_id}_report.txt")
 
-        rc, stdout, stderr = run_script("generate_report.py", [
-            "--master-csvs", self.files.get('integrated', ''),
-            "--out-html", html_out,
-            "--out-txt", txt_out,
-        ])
+        rc, stdout, stderr = run_script(
+            "generate_report.py",
+            [
+                "--master-csvs",
+                self.files.get("integrated", ""),
+                "--out-html",
+                html_out,
+                "--out-txt",
+                txt_out,
+            ],
+        )
 
         if rc == 0:
-            self.files['report_html'] = html_out
-            self.files['report_txt'] = txt_out
+            self.files["report_html"] = html_out
+            self.files["report_txt"] = txt_out
             return StepResult("report", True, "Report generated")
         return StepResult("report", False, stderr[:500])
 
@@ -1220,9 +1428,12 @@ class PipelineRunner:
         os.makedirs(fig_dir, exist_ok=True)
 
         fig_args = [
-            "--master-csvs", self.files.get('integrated', ''),
-            "--outdir", fig_dir,
-            "--dpi", str(self.config.dpi),
+            "--master-csvs",
+            self.files.get("integrated", ""),
+            "--outdir",
+            fig_dir,
+            "--dpi",
+            str(self.config.dpi),
         ]
         # Pass figure toggles
         if not self.config.fig_category:
@@ -1239,7 +1450,7 @@ class PipelineRunner:
         rc, stdout, stderr = run_script("generate_figures.py", fig_args)
 
         if rc == 0:
-            self.files['figures_dir'] = fig_dir
+            self.files["figures_dir"] = fig_dir
             return StepResult("figures", True, "Figures generated")
         return StepResult("figures", False, stderr[:500])
 
@@ -1268,7 +1479,7 @@ class PipelineRunner:
             progress_dir = outdir / ".ssign"
             progress_dir.mkdir(exist_ok=True)
             progress_path = progress_dir / f"{sid}_progress.json"
-            with open(progress_path, 'w') as f:
+            with open(progress_path, "w") as f:
                 json.dump(progress, f, indent=2)
         except Exception as e:
             logger.warning(f"Failed to save progress: {e}")
@@ -1333,9 +1544,7 @@ class PipelineRunner:
             self.work_dir = prev_work_dir
             # Only restore files that still exist
             for key, path in prev_files.items():
-                if isinstance(path, str) and (
-                    os.path.exists(path) or not path
-                ):
+                if isinstance(path, str) and (os.path.exists(path) or not path):
                     self.files[key] = path
             logger.info(
                 f"Resuming: {len(completed)} steps already done: "
@@ -1367,10 +1576,10 @@ class PipelineRunner:
         self._build_summary(outdir / f"{sid}_summary.txt")
 
         # 4. Figures directory (per-sample subfolder for parallel safety)
-        if 'figures_dir' in self.files and os.path.exists(self.files['figures_dir']):
+        if "figures_dir" in self.files and os.path.exists(self.files["figures_dir"]):
             dest = outdir / "figures" / sid
             dest.mkdir(parents=True, exist_ok=True)
-            for fig_file in Path(self.files['figures_dir']).iterdir():
+            for fig_file in Path(self.files["figures_dir"]).iterdir():
                 if fig_file.is_file():
                     shutil.copy2(fig_file, dest / fig_file.name)
 
@@ -1381,20 +1590,20 @@ class PipelineRunner:
         excluded = set(self.config.excluded_systems or [])
 
         df_sys = None
-        fpath = self.files.get('valid_systems', '')
+        fpath = self.files.get("valid_systems", "")
         if fpath and os.path.exists(fpath):
             try:
-                df_sys = pd.read_csv(fpath, sep='\t')
-                df_sys.insert(0, 'record_type', 'system')
+                df_sys = pd.read_csv(fpath, sep="\t")
+                df_sys.insert(0, "record_type", "system")
             except Exception:
                 pass
 
         df_comp = None
-        fpath = self.files.get('ss_components', '')
+        fpath = self.files.get("ss_components", "")
         if fpath and os.path.exists(fpath):
             try:
-                df_comp = pd.read_csv(fpath, sep='\t')
-                df_comp.insert(0, 'record_type', 'component')
+                df_comp = pd.read_csv(fpath, sep="\t")
+                df_comp.insert(0, "record_type", "component")
             except Exception:
                 pass
 
@@ -1406,15 +1615,15 @@ class PipelineRunner:
         df = pd.concat(frames, ignore_index=True)
 
         # Sort: sample_id → ss_type → record_type (system before component)
-        type_order = {'system': 0, 'component': 1}
-        df['_sort'] = df['record_type'].map(type_order)
+        type_order = {"system": 0, "component": 1}
+        df["_sort"] = df["record_type"].map(type_order)
         sort_cols = []
-        if 'sample_id' in df.columns:
-            sort_cols.append('sample_id')
-        if 'ss_type' in df.columns:
-            sort_cols.append('ss_type')
-        sort_cols.append('_sort')
-        df = df.sort_values(sort_cols).drop(columns=['_sort'])
+        if "sample_id" in df.columns:
+            sort_cols.append("sample_id")
+        if "ss_type" in df.columns:
+            sort_cols.append("ss_type")
+        sort_cols.append("_sort")
+        df = df.sort_values(sort_cols).drop(columns=["_sort"])
 
         return df, excluded
 
@@ -1434,20 +1643,20 @@ class PipelineRunner:
 
         # ── Load systems ──
         df_sys = None
-        fpath = self.files.get('valid_systems', '')
+        fpath = self.files.get("valid_systems", "")
         if fpath and os.path.exists(fpath):
             try:
-                df_sys = pd.read_csv(fpath, sep='\t')
-                df_sys.insert(0, 'record_type', 'system')
+                df_sys = pd.read_csv(fpath, sep="\t")
+                df_sys.insert(0, "record_type", "system")
             except Exception:
                 pass
 
         df_comp = None
-        fpath = self.files.get('ss_components', '')
+        fpath = self.files.get("ss_components", "")
         if fpath and os.path.exists(fpath):
             try:
-                df_comp = pd.read_csv(fpath, sep='\t')
-                df_comp.insert(0, 'record_type', 'component')
+                df_comp = pd.read_csv(fpath, sep="\t")
+                df_comp.insert(0, "record_type", "component")
             except Exception:
                 pass
 
@@ -1456,21 +1665,21 @@ class PipelineRunner:
         df_systems = pd.DataFrame()
         if sys_frames:
             df_systems = pd.concat(sys_frames, ignore_index=True)
-            if 'ss_type' in df_systems.columns and excluded:
-                df_systems = df_systems[~df_systems['ss_type'].isin(excluded)]
-            type_order = {'system': 0, 'component': 1}
-            df_systems['_sort'] = df_systems['record_type'].map(type_order)
+            if "ss_type" in df_systems.columns and excluded:
+                df_systems = df_systems[~df_systems["ss_type"].isin(excluded)]
+            type_order = {"system": 0, "component": 1}
+            df_systems["_sort"] = df_systems["record_type"].map(type_order)
             sort_cols = []
-            if 'sample_id' in df_systems.columns:
-                sort_cols.append('sample_id')
-            if 'ss_type' in df_systems.columns:
-                sort_cols.append('ss_type')
-            sort_cols.append('_sort')
-            df_systems = df_systems.sort_values(sort_cols).drop(columns=['_sort'])
+            if "sample_id" in df_systems.columns:
+                sort_cols.append("sample_id")
+            if "ss_type" in df_systems.columns:
+                sort_cols.append("ss_type")
+            sort_cols.append("_sort")
+            df_systems = df_systems.sort_values(sort_cols).drop(columns=["_sort"])
 
         # ── Load secreted proteins (integrated annotations) ──
         df_subs = pd.DataFrame()
-        fpath = self.files.get('integrated', '')
+        fpath = self.files.get("integrated", "")
         if fpath and os.path.exists(fpath):
             try:
                 df_subs = pd.read_csv(fpath)
@@ -1478,21 +1687,23 @@ class PipelineRunner:
                 pass
 
         # Filter proteins from excluded systems
-        if not df_subs.empty and 'nearby_ss_types' in df_subs.columns and excluded:
+        if not df_subs.empty and "nearby_ss_types" in df_subs.columns and excluded:
+
             def _has_non_excluded_ss(val):
                 if pd.isna(val) or not val:
                     return False
-                types = {t.strip() for t in str(val).split(',')}
+                types = {t.strip() for t in str(val).split(",")}
                 return bool(types - excluded)
-            df_subs = df_subs[df_subs['nearby_ss_types'].apply(_has_non_excluded_ss)]
+
+            df_subs = df_subs[df_subs["nearby_ss_types"].apply(_has_non_excluded_ss)]
 
         # Sort secreted proteins
         sort_cols = []
         if not df_subs.empty:
-            if 'sample_id' in df_subs.columns:
-                sort_cols.append('sample_id')
-            if 'nearby_ss_types' in df_subs.columns:
-                sort_cols.append('nearby_ss_types')
+            if "sample_id" in df_subs.columns:
+                sort_cols.append("sample_id")
+            if "nearby_ss_types" in df_subs.columns:
+                sort_cols.append("nearby_ss_types")
             if sort_cols:
                 df_subs = df_subs.sort_values(sort_cols)
 
@@ -1501,91 +1712,127 @@ class PipelineRunner:
         # Column order matching the reference CSV structure
         priority_cols = [
             # Identity
-            'locus_tag', 'sample_id',
+            "locus_tag",
+            "sample_id",
             # Consensus annotations (Phase 3 — computed if available)
-            'broad_consensus_annotation', 'broad_annotation',
-            'detailed_annotation', 'detailed_consensus_annotation',
-            'evidence_keywords', 'n_tools_agreeing', 'n_tools_with_hits',
-            'concordance_ratio', 'confidence_tier',
+            "broad_consensus_annotation",
+            "broad_annotation",
+            "detailed_annotation",
+            "detailed_consensus_annotation",
+            "evidence_keywords",
+            "n_tools_agreeing",
+            "n_tools_with_hits",
+            "concordance_ratio",
+            "confidence_tier",
             # Physicochemical properties
-            'aa_length', 'gravy', 'mw_da', 'isoelectric_point',
-            'charge_ph7', 'instability_index', 'aromaticity',
+            "aa_length",
+            "gravy",
+            "mw_da",
+            "isoelectric_point",
+            "charge_ph7",
+            "instability_index",
+            "aromaticity",
             # Secretion system context
-            'nearby_ss_types', 'secretion_evidence', 'is_secreted',
+            "nearby_ss_types",
+            "secretion_evidence",
+            "is_secreted",
             # Localization predictions (DeepLocPro)
-            'predicted_localization', 'dlp_extracellular_prob',
-            'dlp_max_localization', 'dlp_max_probability',
-            'periplasmic_prob', 'outer_membrane_prob', 'cytoplasmic_prob',
+            "predicted_localization",
+            "dlp_extracellular_prob",
+            "dlp_max_localization",
+            "dlp_max_probability",
+            "periplasmic_prob",
+            "outer_membrane_prob",
+            "cytoplasmic_prob",
             # Secretion type prediction (DeepSecE)
-            'dse_ss_type', 'dse_max_prob',
+            "dse_ss_type",
+            "dse_max_prob",
             # Signal peptide prediction (SignalP)
-            'signalp_prediction', 'signalp_probability', 'signalp_cs_position',
+            "signalp_prediction",
+            "signalp_probability",
+            "signalp_cs_position",
             # GBFF original annotation
-            'gbff_annotation',
+            "gbff_annotation",
             # BLASTp hits
-            'blastp_hit_accession', 'blastp_hit_description',
-            'blastp_pident', 'blastp_qcov', 'blastp_evalue',
+            "blastp_hit_accession",
+            "blastp_hit_description",
+            "blastp_pident",
+            "blastp_qcov",
+            "blastp_evalue",
             # HHpred Pfam
-            'pfam_top1_id', 'pfam_top1_description', 'pfam_top1_probability',
-            'pfam_top1_evalue', 'pfam_top1_score',
+            "pfam_top1_id",
+            "pfam_top1_description",
+            "pfam_top1_probability",
+            "pfam_top1_evalue",
+            "pfam_top1_score",
             # HHpred PDB
-            'pdb_top1_id', 'pdb_top1_description', 'pdb_top1_probability',
-            'pdb_top1_evalue', 'pdb_top1_score',
+            "pdb_top1_id",
+            "pdb_top1_description",
+            "pdb_top1_probability",
+            "pdb_top1_evalue",
+            "pdb_top1_score",
             # InterProScan
-            'interpro_domains', 'interpro_go_terms',
-            'interpro_pfam_ids', 'interpro_descriptions',
+            "interpro_domains",
+            "interpro_go_terms",
+            "interpro_pfam_ids",
+            "interpro_descriptions",
             # Ortholog groups
-            'ortholog_group', 'og_n_members', 'og_mean_pident',
+            "ortholog_group",
+            "og_n_members",
+            "og_mean_pident",
             # Annotation tool count
-            'annotation_tools',
+            "annotation_tools",
         ]
         if not df_subs.empty:
             existing_priority = [c for c in priority_cols if c in df_subs.columns]
-            remaining = [c for c in df_subs.columns if c not in existing_priority
-                         and c != 'sequence']
+            remaining = [
+                c
+                for c in df_subs.columns
+                if c not in existing_priority and c != "sequence"
+            ]
             # Put sequence at the end
             col_order = existing_priority + sorted(remaining)
-            if 'sequence' in df_subs.columns:
-                col_order.append('sequence')
+            if "sequence" in df_subs.columns:
+                col_order.append("sequence")
             df_subs = df_subs[col_order]
 
         # ── Determine which SS have associated secreted proteins ──
         ss_types_with_subs = set()
-        if not df_subs.empty and 'nearby_ss_types' in df_subs.columns:
-            for val in df_subs['nearby_ss_types'].dropna():
-                for t in str(val).split(','):
+        if not df_subs.empty and "nearby_ss_types" in df_subs.columns:
+            for val in df_subs["nearby_ss_types"].dropna():
+                for t in str(val).split(","):
                     ss_types_with_subs.add(t.strip())
 
         df_systems_with_subs = pd.DataFrame()
         df_systems_other = pd.DataFrame()
-        if not df_systems.empty and 'ss_type' in df_systems.columns:
-            mask = df_systems['ss_type'].isin(ss_types_with_subs)
+        if not df_systems.empty and "ss_type" in df_systems.columns:
+            mask = df_systems["ss_type"].isin(ss_types_with_subs)
             df_systems_with_subs = df_systems[mask]
             df_systems_other = df_systems[~mask]
 
         # ── Write chunked CSV ──
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, "w", newline="") as f:
             chunk_written = False
 
             # Chunk 1: Secreted proteins
             if not df_subs.empty:
-                f.write('# Secreted Proteins\n')
+                f.write("# Secreted Proteins\n")
                 df_subs.to_csv(f, index=False)
                 chunk_written = True
 
             # Chunk 2: SS with associated secreted proteins
             if not df_systems_with_subs.empty:
                 if chunk_written:
-                    f.write('\n')
-                f.write('# Secretion Systems (with secreted proteins)\n')
+                    f.write("\n")
+                f.write("# Secretion Systems (with secreted proteins)\n")
                 df_systems_with_subs.to_csv(f, index=False)
                 chunk_written = True
 
             # Chunk 3: Other non-excluded SS
             if not df_systems_other.empty:
                 if chunk_written:
-                    f.write('\n')
-                f.write('# Secretion Systems (other)\n')
+                    f.write("\n")
+                f.write("# Secretion Systems (other)\n")
                 df_systems_other.to_csv(f, index=False)
 
     def _build_raw_csv(self, output_path: Path):
@@ -1594,7 +1841,7 @@ class PipelineRunner:
 
         # Start with integrated annotations (richest data)
         df = pd.DataFrame()
-        fpath = self.files.get('integrated', '')
+        fpath = self.files.get("integrated", "")
         if fpath and os.path.exists(fpath):
             try:
                 df = pd.read_csv(fpath)
@@ -1603,10 +1850,12 @@ class PipelineRunner:
 
         if df.empty:
             # Fallback: just copy substrates if no integrated CSV
-            fpath = self.files.get('substrates_filtered', self.files.get('substrates', ''))
+            fpath = self.files.get(
+                "substrates_filtered", self.files.get("substrates", "")
+            )
             if fpath and os.path.exists(fpath):
                 try:
-                    df = pd.read_csv(fpath, sep='\t')
+                    df = pd.read_csv(fpath, sep="\t")
                 except Exception:
                     pass
 
@@ -1614,45 +1863,51 @@ class PipelineRunner:
             df.to_csv(output_path, index=False)
         else:
             # Write empty file with minimal header
-            with open(output_path, 'w') as f:
-                f.write('locus_tag,sample_id\n')
+            with open(output_path, "w") as f:
+                f.write("locus_tag,sample_id\n")
 
     def _build_summary(self, output_path: Path):
         """Combine report text, enrichment summary, and Fisher results."""
         parts = []
 
         # Report text
-        if 'report_txt' in self.files and os.path.exists(self.files['report_txt']):
-            with open(self.files['report_txt']) as f:
+        if "report_txt" in self.files and os.path.exists(self.files["report_txt"]):
+            with open(self.files["report_txt"]) as f:
                 parts.append(f.read())
 
         # Enrichment summary
-        if 'enrichment_summary' in self.files and os.path.exists(self.files['enrichment_summary']):
-            with open(self.files['enrichment_summary']) as f:
+        if "enrichment_summary" in self.files and os.path.exists(
+            self.files["enrichment_summary"]
+        ):
+            with open(self.files["enrichment_summary"]) as f:
                 parts.append(
                     "\n\n" + "=" * 60 + "\n"
-                    "ENRICHMENT ANALYSIS\n"
-                    + "=" * 60 + "\n\n" + f.read()
+                    "ENRICHMENT ANALYSIS\n" + "=" * 60 + "\n\n" + f.read()
                 )
 
         # Fisher results table
-        if 'enrichment_fisher' in self.files and os.path.exists(self.files['enrichment_fisher']):
+        if "enrichment_fisher" in self.files and os.path.exists(
+            self.files["enrichment_fisher"]
+        ):
             try:
                 import pandas as pd
-                df = pd.read_csv(self.files['enrichment_fisher'])
+
+                df = pd.read_csv(self.files["enrichment_fisher"])
                 if not df.empty:
                     parts.append(
                         "\n\n" + "-" * 60 + "\n"
                         "Fisher's Exact Test Results\n"
-                        + "-" * 60 + "\n\n"
-                        + df.to_string(index=False) + "\n"
+                        + "-" * 60
+                        + "\n\n"
+                        + df.to_string(index=False)
+                        + "\n"
                     )
             except Exception:
                 pass
 
         if parts:
-            with open(output_path, 'w') as f:
-                f.write(''.join(parts))
+            with open(output_path, "w") as f:
+                f.write("".join(parts))
 
 
 def run_cross_genome_orthologs(
@@ -1676,13 +1931,18 @@ def run_cross_genome_orthologs(
     import pandas as pd
 
     result = {
-        'n_proteins': 0, 'n_groups': 0, 'genomes_updated': 0,
-        'combined_fasta': '', 'orthologs_csv': '', 'ortholog_groups_csv': '',
+        "n_proteins": 0,
+        "n_groups": 0,
+        "genomes_updated": 0,
+        "combined_fasta": "",
+        "orthologs_csv": "",
+        "ortholog_groups_csv": "",
     }
 
     if progress_callback:
-        progress_callback("Cross-genome orthologs", 10,
-                          "Collecting substrates from all genomes...")
+        progress_callback(
+            "Cross-genome orthologs", 10, "Collecting substrates from all genomes..."
+        )
 
     os.makedirs(output_dir, exist_ok=True)
     combined_fasta = os.path.join(output_dir, "all_substrates_combined.faa")
@@ -1691,13 +1951,14 @@ def run_cross_genome_orthologs(
     all_substrate_ids = {}  # locus_tag -> genome_outdir
     n_written = 0
 
-    with open(combined_fasta, 'w') as out_f:
+    with open(combined_fasta, "w") as out_f:
         for gdir in genome_outdirs:
             gpath = Path(gdir)
 
             # Find integrated CSV to get substrate locus_tags
-            integrated_csvs = list(gpath.glob("*_integrated.csv")) + \
-                              list(gpath.glob("*integrated*.csv"))
+            integrated_csvs = list(gpath.glob("*_integrated.csv")) + list(
+                gpath.glob("*integrated*.csv")
+            )
             if not integrated_csvs:
                 logger.warning(f"No integrated CSV in {gdir} -- skipping")
                 continue
@@ -1706,8 +1967,8 @@ def run_cross_genome_orthologs(
             substrate_ids = set()
             try:
                 df = pd.read_csv(integrated_csv)
-                if 'locus_tag' in df.columns:
-                    substrate_ids = set(df['locus_tag'].dropna().astype(str))
+                if "locus_tag" in df.columns:
+                    substrate_ids = set(df["locus_tag"].dropna().astype(str))
             except Exception as e:
                 logger.warning(f"Could not read {integrated_csv}: {e}")
                 continue
@@ -1732,91 +1993,114 @@ def run_cross_genome_orthologs(
 
             for pf in protein_fastas:
                 try:
-                    for rec in SeqIO.parse(str(pf), 'fasta'):
+                    for rec in SeqIO.parse(str(pf), "fasta"):
                         if rec.id in substrate_ids and rec.id not in all_substrate_ids:
-                            SeqIO.write(rec, out_f, 'fasta')
+                            SeqIO.write(rec, out_f, "fasta")
                             all_substrate_ids[rec.id] = gdir
                             n_written += 1
                 except Exception:
                     continue
 
-    result['combined_fasta'] = combined_fasta
-    result['n_proteins'] = n_written
+    result["combined_fasta"] = combined_fasta
+    result["n_proteins"] = n_written
 
     if n_written < 2:
-        logger.info(f"Only {n_written} substrate(s) across all genomes -- "
-                     "skipping cross-genome ortholog grouping")
+        logger.info(
+            f"Only {n_written} substrate(s) across all genomes -- "
+            "skipping cross-genome ortholog grouping"
+        )
         return result
 
     if progress_callback:
-        progress_callback("Cross-genome orthologs", 40,
-                          f"Running all-vs-all BLASTp on {n_written} substrates...")
+        progress_callback(
+            "Cross-genome orthologs",
+            40,
+            f"Running all-vs-all BLASTp on {n_written} substrates...",
+        )
 
     # Step 2: Run ortholog grouping
     orthologs_csv = os.path.join(output_dir, "cross_genome_orthologs.csv")
     groups_csv = os.path.join(output_dir, "cross_genome_ortholog_groups.csv")
 
-    rc, stdout, stderr = run_script("run_ortholog_grouping.py", [
-        "--substrates-fasta", combined_fasta,
-        "--min-pident", str(min_pident),
-        "--min-qcov", str(min_qcov),
-        "--output", orthologs_csv,
-        "--output-groups", groups_csv,
-    ], timeout=3600)
+    rc, stdout, stderr = run_script(
+        "run_ortholog_grouping.py",
+        [
+            "--substrates-fasta",
+            combined_fasta,
+            "--min-pident",
+            str(min_pident),
+            "--min-qcov",
+            str(min_qcov),
+            "--output",
+            orthologs_csv,
+            "--output-groups",
+            groups_csv,
+        ],
+        timeout=3600,
+    )
 
     if rc != 0:
         logger.error(f"Cross-genome ortholog grouping failed: {stderr[:500]}")
         return result
 
-    result['orthologs_csv'] = orthologs_csv
-    result['ortholog_groups_csv'] = groups_csv
+    result["orthologs_csv"] = orthologs_csv
+    result["ortholog_groups_csv"] = groups_csv
 
     if progress_callback:
-        progress_callback("Cross-genome orthologs", 70,
-                          "Merging ortholog groups into per-genome results...")
+        progress_callback(
+            "Cross-genome orthologs",
+            70,
+            "Merging ortholog groups into per-genome results...",
+        )
 
     # Step 3: Read ortholog assignments and merge into each genome's integrated CSV
     try:
         df_og = pd.read_csv(orthologs_csv)
-        result['n_groups'] = df_og['ortholog_group'].nunique()
+        result["n_groups"] = df_og["ortholog_group"].nunique()
     except Exception as e:
         logger.warning(f"Could not read ortholog results: {e}")
         return result
 
     # Prefix with "xg_" (cross-genome) to distinguish from per-genome groups
-    df_og = df_og.rename(columns={
-        'ortholog_group': 'xg_ortholog_group',
-        'og_n_members': 'xg_og_n_members',
-        'og_mean_pident': 'xg_og_mean_pident',
-    })
+    df_og = df_og.rename(
+        columns={
+            "ortholog_group": "xg_ortholog_group",
+            "og_n_members": "xg_og_n_members",
+            "og_mean_pident": "xg_og_mean_pident",
+        }
+    )
 
     genomes_updated = 0
     for gdir in genome_outdirs:
         gpath = Path(gdir)
-        integrated_csvs = list(gpath.glob("*_integrated.csv")) + \
-                          list(gpath.glob("*integrated*.csv"))
+        integrated_csvs = list(gpath.glob("*_integrated.csv")) + list(
+            gpath.glob("*integrated*.csv")
+        )
         if not integrated_csvs:
             continue
 
         integrated_csv = str(integrated_csvs[0])
         try:
             df_int = pd.read_csv(integrated_csv)
-            for col in ['xg_ortholog_group', 'xg_og_n_members', 'xg_og_mean_pident']:
+            for col in ["xg_ortholog_group", "xg_og_n_members", "xg_og_mean_pident"]:
                 if col in df_int.columns:
                     df_int = df_int.drop(columns=[col])
 
-            df_merged = df_int.merge(df_og, on='locus_tag', how='left')
+            df_merged = df_int.merge(df_og, on="locus_tag", how="left")
             df_merged.to_csv(integrated_csv, index=False)
             genomes_updated += 1
             logger.info(f"Merged cross-genome orthologs into {integrated_csv}")
         except Exception as e:
             logger.warning(f"Could not merge into {integrated_csv}: {e}")
 
-    result['genomes_updated'] = genomes_updated
+    result["genomes_updated"] = genomes_updated
 
     if progress_callback:
-        progress_callback("Cross-genome orthologs", 100,
-                          f"Done: {result['n_groups']} groups across "
-                          f"{n_written} substrates from {genomes_updated} genomes")
+        progress_callback(
+            "Cross-genome orthologs",
+            100,
+            f"Done: {result['n_groups']} groups across "
+            f"{n_written} substrates from {genomes_updated} genomes",
+        )
 
     return result

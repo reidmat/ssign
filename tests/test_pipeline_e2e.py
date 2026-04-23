@@ -10,22 +10,24 @@ Runs the full pipeline with:
 - HH-suite SKIPPED (slow, optional)
 - SignalP SKIPPED
 """
+
 import logging
 import os
 import sys
-import tempfile
 
 # Add package to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from ssign_app.core.runner import PipelineConfig, PipelineRunner
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
+
 def main():
     # Input: Xanthobacter genome (GenBank)
-    test_data = os.path.join(os.path.dirname(__file__), 'data',
-                             'Xanthobacter_tagetidis_TagT2C_genomic.gbff')
+    test_data = os.path.join(
+        os.path.dirname(__file__), "data", "Xanthobacter_tagetidis_TagT2C_genomic.gbff"
+    )
     if not os.path.exists(test_data):
         print(f"ERROR: Test genome not found: {test_data}")
         sys.exit(1)
@@ -43,10 +45,9 @@ def main():
         conf_threshold=0.8,
         proximity_window=3,
         # Skip heavy tools
-        skip_deepsece=True,     # ESM model too large for test env
-        skip_signalp=True,      # Optional
-        skip_hhsuite=True,      # Optional, slow
-        skip_foldseek=True,
+        skip_deepsece=True,  # ESM model too large for test env
+        skip_signalp=True,  # Optional
+        skip_hhsuite=True,  # Optional, slow
         skip_plmblast=True,
         skip_structure=True,
         # Enable core annotation
@@ -93,6 +94,7 @@ def main():
             print(f"  {f}/: {n} files")
 
     sys.exit(0 if failed == 0 else 1)
+
 
 if __name__ == "__main__":
     main()

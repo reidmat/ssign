@@ -35,11 +35,11 @@ nextflow run ssign/main.nf \
 
 ### Single Genome File
 
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| GenBank | `.gbff`, `.gbk`, `.gb` | Annotated genome (recommended — contains protein sequences and gene order) |
-| GFF3 + FASTA | `.gff3` + `.fasta` | Provide both files via samplesheet |
-| FASTA contigs | `.fasta`, `.fna`, `.fa` | Raw contigs — Prodigal will predict ORFs |
+| Format        | Extension               | Description                                                                |
+| ------------- | ----------------------- | -------------------------------------------------------------------------- |
+| GenBank       | `.gbff`, `.gbk`, `.gb`  | Annotated genome (recommended — contains protein sequences and gene order) |
+| GFF3 + FASTA  | `.gff3` + `.fasta`      | Provide both files via samplesheet                                         |
+| FASTA contigs | `.fasta`, `.fna`, `.fa` | Raw contigs — Prodigal will predict ORFs                                   |
 
 ### Samplesheet (CSV)
 
@@ -58,33 +58,32 @@ Genome_C,/path/to/contigs.fasta,
 
 ## Execution Profiles
 
-| Profile | Container | Scheduler | Use case |
-|---------|-----------|-----------|----------|
-| `local` | Docker | Local | Desktop/laptop |
-| `hpc_pbs` | Singularity | PBS | HPC with PBS (e.g. Imperial College) |
-| `hpc_slurm` | Singularity | SLURM | HPC with SLURM |
-| `cloud_aws` | Docker | AWS Batch | Cloud execution |
-| `test` | Docker | Local | CI testing with small genomes |
+| Profile     | Container   | Scheduler | Use case                             |
+| ----------- | ----------- | --------- | ------------------------------------ |
+| `local`     | Docker      | Local     | Desktop/laptop                       |
+| `hpc_pbs`   | Singularity | PBS       | HPC with PBS (e.g. Imperial College) |
+| `hpc_slurm` | Singularity | SLURM     | HPC with SLURM                       |
+| `cloud_aws` | Docker      | AWS Batch | Cloud execution                      |
+| `test`      | Docker      | Local     | CI testing with small genomes        |
 
 ## Annotation Tool Modes
 
 Each annotation tool supports **local** and/or **remote** mode:
 
-| Tool | Local | Remote | Recommended | Notes |
-|------|-------|--------|-------------|-------|
-| BLASTp | `--blastp_mode local --blastp_db /path` | `--blastp_mode remote` (default) | Remote for <50 proteins; local swissprot for larger | nr: ~300GB, swissprot: ~1.5GB |
-| HH-suite | `--hhsuite_mode local` + DB paths | `--hhsuite_mode remote` (default) | Remote for <100 proteins | Pfam-A: ~3GB, PDB70: ~20GB, UniClust30: ~25GB |
-| InterProScan | `--interproscan_mode local --interproscan_db /path` | `--interproscan_mode remote` (default) | Remote for <200 proteins | Local install: ~80GB |
-| Foldseek | `--foldseek_db /path` | N/A (local only) | Local preferred (fast) | DB: ~10GB |
-| pLM-BLAST | `--plmblast_ecod_db /path` | N/A (MPI ECOD70 is broken) | Local only | ECOD70: ~5-10GB |
+| Tool         | Local                                               | Remote                                 | Recommended                                         | Notes                                         |
+| ------------ | --------------------------------------------------- | -------------------------------------- | --------------------------------------------------- | --------------------------------------------- |
+| BLASTp       | `--blastp_mode local --blastp_db /path`             | `--blastp_mode remote` (default)       | Remote for <50 proteins; local swissprot for larger | nr: ~300GB, swissprot: ~1.5GB                 |
+| HH-suite     | `--hhsuite_mode local` + DB paths                   | `--hhsuite_mode remote` (default)      | Remote for <100 proteins                            | Pfam-A: ~3GB, PDB70: ~20GB, UniClust30: ~25GB |
+| InterProScan | `--interproscan_mode local --interproscan_db /path` | `--interproscan_mode remote` (default) | Remote for <200 proteins                            | Local install: ~80GB                          |
+| pLM-BLAST    | `--plmblast_ecod_db /path`                          | N/A (MPI ECOD70 is broken)             | Local only                                          | ECOD70: ~5-10GB                               |
 
 ### Rate Limits (Remote Mode)
 
-| Tool | Rate Limit | Practical Limit |
-|------|-----------|-----------------|
-| BLASTp (NCBI) | 3 requests/sec | ~50 proteins/run before throttling |
-| HH-suite (MPI Toolkit) | 200 jobs/hr, 2000/day | ~100 proteins/run comfortable |
-| InterProScan (EBI) | 30 req/sec, 25k seq/day | ~200 proteins/run comfortable |
+| Tool                   | Rate Limit              | Practical Limit                    |
+| ---------------------- | ----------------------- | ---------------------------------- |
+| BLASTp (NCBI)          | 3 requests/sec          | ~50 proteins/run before throttling |
+| HH-suite (MPI Toolkit) | 200 jobs/hr, 2000/day   | ~100 proteins/run comfortable      |
+| InterProScan (EBI)     | 30 req/sec, 25k seq/day | ~200 proteins/run comfortable      |
 
 ## Skipping Tools
 
@@ -97,7 +96,6 @@ nextflow run ssign/main.nf \
     --skip_signalp \
     --skip_hhsuite \
     --skip_plmblast \
-    --skip_foldseek \
     --skip_structure \
     -profile local
 ```

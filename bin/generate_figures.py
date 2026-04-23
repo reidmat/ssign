@@ -13,14 +13,13 @@ import os
 from collections import Counter
 
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import numpy as np
 import pandas as pd
 import seaborn as sns
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -39,12 +38,12 @@ def load_data(master_csvs):
 
 def fig_ss_type_distribution(df, outdir, dpi):
     """Bar chart of substrate counts per SS type."""
-    if 'nearby_ss_types' not in df.columns:
+    if "nearby_ss_types" not in df.columns:
         return
 
     ss_counts = Counter()
-    for val in df['nearby_ss_types'].dropna():
-        for ss in str(val).split(','):
+    for val in df["nearby_ss_types"].dropna():
+        for ss in str(val).split(","):
             ss = ss.strip()
             if ss:
                 ss_counts[ss] += 1
@@ -61,7 +60,7 @@ def fig_ss_type_distribution(df, outdir, dpi):
     ax.set_xlabel("Secretion System Type")
     ax.set_ylabel("Number of Substrates")
     ax.set_title("Substrate Distribution by Secretion System Type")
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
     plt.savefig(os.path.join(outdir, "fig1_ss_type_distribution.png"), dpi=dpi)
     plt.close()
@@ -71,13 +70,12 @@ def fig_ss_type_distribution(df, outdir, dpi):
 def fig_tool_coverage(df, outdir, dpi):
     """Heatmap of annotation tool coverage per substrate."""
     tool_prefixes = {
-        'BLASTp': 'blastp_hit',
-        'Foldseek': 'foldseek_best',
-        'InterProScan': 'interpro_domains',
-        'HHpred Pfam': 'pfam_top1',
-        'HHpred PDB': 'pdb_top1',
-        'pLM-BLAST': 'ecod70_top1',
-        'SignalP': 'signalp_prediction',
+        "BLASTp": "blastp_hit",
+        "InterProScan": "interpro_domains",
+        "HHpred Pfam": "pfam_top1",
+        "HHpred PDB": "pdb_top1",
+        "pLM-BLAST": "ecod70_top1",
+        "SignalP": "signalp_prediction",
     }
 
     coverage = {}
@@ -100,8 +98,13 @@ def fig_tool_coverage(df, outdir, dpi):
 
     for bar, count in zip(bars, counts):
         pct = 100 * count / max(total, 1)
-        ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height()/2,
-                f"{pct:.0f}%", va='center', fontsize=9)
+        ax.text(
+            bar.get_width() + 1,
+            bar.get_y() + bar.get_height() / 2,
+            f"{pct:.0f}%",
+            va="center",
+            fontsize=9,
+        )
 
     plt.tight_layout()
     plt.savefig(os.path.join(outdir, "fig2_tool_coverage.png"), dpi=dpi)
@@ -111,32 +114,38 @@ def fig_tool_coverage(df, outdir, dpi):
 
 def fig_protein_lengths(df, outdir, dpi):
     """Violin plot of protein lengths by SS type."""
-    if 'aa_length' not in df.columns and 'nearby_ss_types' not in df.columns:
+    if "aa_length" not in df.columns and "nearby_ss_types" not in df.columns:
         # Try to compute from sequence if available
         return
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    if 'nearby_ss_types' in df.columns:
+    if "nearby_ss_types" in df.columns:
         # Explode multi-type substrates
         rows = []
         for _, row in df.iterrows():
-            length = row.get('aa_length', 0)
+            length = row.get("aa_length", 0)
             if pd.isna(length) or length == 0:
                 continue
-            for ss in str(row.get('nearby_ss_types', '')).split(','):
+            for ss in str(row.get("nearby_ss_types", "")).split(","):
                 ss = ss.strip()
                 if ss:
-                    rows.append({'ss_type': ss, 'length': length})
+                    rows.append({"ss_type": ss, "length": length})
 
         if rows:
             plot_df = pd.DataFrame(rows)
-            sns.violinplot(data=plot_df, x='ss_type', y='length', ax=ax,
-                           inner='box', palette='Set2')
+            sns.violinplot(
+                data=plot_df,
+                x="ss_type",
+                y="length",
+                ax=ax,
+                inner="box",
+                palette="Set2",
+            )
             ax.set_xlabel("Secretion System Type")
             ax.set_ylabel("Protein Length (aa)")
             ax.set_title("Substrate Protein Length by SS Type")
-            plt.xticks(rotation=45, ha='right')
+            plt.xticks(rotation=45, ha="right")
 
     plt.tight_layout()
     plt.savefig(os.path.join(outdir, "fig3_protein_lengths.png"), dpi=dpi)
@@ -146,7 +155,7 @@ def fig_protein_lengths(df, outdir, dpi):
 
 def fig_physicochemical(df, outdir, dpi):
     """Violin plots of physicochemical properties."""
-    props = ['gravy', 'mw_da', 'isoelectric_point', 'instability_index']
+    props = ["gravy", "mw_da", "isoelectric_point", "instability_index"]
     available = [p for p in props if p in df.columns]
 
     if not available:
@@ -159,8 +168,8 @@ def fig_physicochemical(df, outdir, dpi):
     for ax, prop in zip(axes, available):
         data = df[prop].dropna()
         if len(data) > 0:
-            sns.violinplot(y=data, ax=ax, color='steelblue', inner='box')
-            ax.set_title(prop.replace('_', ' ').title())
+            sns.violinplot(y=data, ax=ax, color="steelblue", inner="box")
+            ax.set_title(prop.replace("_", " ").title())
 
     plt.suptitle("Physicochemical Properties of Substrates", y=1.02)
     plt.tight_layout()
@@ -171,7 +180,7 @@ def fig_physicochemical(df, outdir, dpi):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate ssign figures")
-    parser.add_argument("--master-csvs", nargs='+', required=True)
+    parser.add_argument("--master-csvs", nargs="+", required=True)
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--dpi", type=int, default=300)
     args = parser.parse_args()
@@ -193,5 +202,5 @@ def main():
     logger.info(f"Figures saved to {args.outdir}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

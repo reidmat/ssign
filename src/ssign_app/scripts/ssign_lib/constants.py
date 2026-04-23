@@ -20,15 +20,11 @@ PLDDT_THRESHOLD = 70  # Minimum mean pLDDT for structure acceptance
 
 # --- BLASTp ---
 BLASTP_MIN_PIDENT = 80  # Minimum percent identity
-BLASTP_MIN_QCOV = 80    # Minimum query coverage
-
-# --- Foldseek ---
-FOLDSEEK_EVALUE = 0.001
-FOLDSEEK_TMSCORE = 0.8
+BLASTP_MIN_QCOV = 80  # Minimum query coverage
 
 # --- T5aSS domain classification ---
 MIN_PASSENGER_LENGTH = 100  # aa — below this = "minimal passenger"
-LINKER_LENGTH = 30          # aa — alpha-helix linker between passenger and barrel
+LINKER_LENGTH = 30  # aa — alpha-helix linker between passenger and barrel
 
 # --- System filtering ---
 DEFAULT_EXCLUDED_SYSTEMS = ["Flagellum", "Tad", "T3SS"]

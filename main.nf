@@ -10,7 +10,7 @@
  *   2. SS Detection         — MacSyFinder v2 with TXSScan models
  *   3. Secreted Prediction  — DeepLocPro, DeepSecE, SignalP 6.0
  *   4. Substrate ID         — proximity analysis, T5SS handling, enrichment, filtering
- *   5. Annotation (opt.)    — BLASTp, HH-suite, Foldseek, InterProScan, ProtParam, etc.
+ *   5. Annotation (opt.)    — BLASTp, HH-suite, InterProScan, ProtParam, etc.
  *   6. Integration          — merge annotations, generate report + figures
  *
  * Usage:

@@ -3,14 +3,19 @@
 
 Runs 2 genomes, then cross-genome ortholog grouping.
 """
+
 import logging
 import os
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from ssign_app.core.runner import PipelineConfig, PipelineRunner, run_cross_genome_orthologs
+from ssign_app.core.runner import (
+    PipelineConfig,
+    PipelineRunner,
+    run_cross_genome_orthologs,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,7 +35,6 @@ def run_genome(genome_path, sample_id, outdir, enable_hhpred=True):
         # Skip heavy tools
         skip_deepsece=True,
         skip_signalp=True,
-        skip_foldseek=True,
         skip_plmblast=True,
         skip_structure=True,
         # Enable annotation tools
@@ -66,9 +70,11 @@ def run_genome(genome_path, sample_id, outdir, enable_hhpred=True):
 
 
 def main():
-    test_dir = os.path.join(os.path.dirname(__file__), 'data')
-    genome1 = os.path.join(test_dir, 'Xanthobacter_tagetidis_TagT2C_genomic.gbff')
-    genome2 = os.path.join(test_dir, 'Roseixanthobacter_finlandensis_VTT_E-85241_genomic.gbff')
+    test_dir = os.path.join(os.path.dirname(__file__), "data")
+    genome1 = os.path.join(test_dir, "Xanthobacter_tagetidis_TagT2C_genomic.gbff")
+    genome2 = os.path.join(
+        test_dir, "Roseixanthobacter_finlandensis_VTT_E-85241_genomic.gbff"
+    )
 
     for g in [genome1, genome2]:
         if not os.path.exists(g):
@@ -88,9 +94,9 @@ def main():
 
     for genome_path, sample_id, outdir in genomes:
         os.makedirs(outdir, exist_ok=True)
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"GENOME: {sample_id} ({time.strftime('%H:%M:%S')})")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
 
         start = time.time()
         results = run_genome(genome_path, sample_id, outdir, enable_hhpred=True)
@@ -98,12 +104,12 @@ def main():
 
         all_results.extend(results)
         genome_outdirs.append(outdir)
-        logger.info(f"  Time: {elapsed:.0f}s ({elapsed/60:.1f}m)")
+        logger.info(f"  Time: {elapsed:.0f}s ({elapsed / 60:.1f}m)")
 
     # Cross-genome ortholog grouping
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info(f"CROSS-GENOME ORTHOLOGS ({time.strftime('%H:%M:%S')})")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
     start = time.time()
     xg_result = run_cross_genome_orthologs(
@@ -115,43 +121,49 @@ def main():
     )
     elapsed = time.time() - start
 
-    logger.info(f"\n=== CROSS-GENOME RESULTS ===")
+    logger.info("\n=== CROSS-GENOME RESULTS ===")
     for k, v in xg_result.items():
         logger.info(f"  {k}: {v}")
     logger.info(f"  Time: {elapsed:.0f}s")
 
     # Final summary
     total = time.time() - total_start
-    logger.info(f"\n{'='*60}")
-    logger.info(f"FINAL SUMMARY")
-    logger.info(f"{'='*60}")
+    logger.info(f"\n{'=' * 60}")
+    logger.info("FINAL SUMMARY")
+    logger.info(f"{'=' * 60}")
 
     n_ok = sum(1 for r in all_results if r.success)
     n_total = len(all_results)
     logger.info(f"Steps: {n_ok}/{n_total} succeeded")
     logger.info(f"Cross-genome groups: {xg_result.get('n_groups', 0)}")
-    logger.info(f"Total wall time: {total:.0f}s ({total/60:.1f}m)")
+    logger.info(f"Total wall time: {total:.0f}s ({total / 60:.1f}m)")
 
     # List output files
     for gdir in genome_outdirs:
         name = os.path.basename(gdir)
-        csvs = [f for f in os.listdir(gdir) if f.endswith('.csv')]
+        csvs = [f for f in os.listdir(gdir) if f.endswith(".csv")]
         logger.info(f"  {name}: {len(csvs)} CSVs")
 
-    xg_files = [f for f in os.listdir(base_outdir)
-                if f.endswith('.csv') or f.endswith('.faa')]
+    xg_files = [
+        f for f in os.listdir(base_outdir) if f.endswith(".csv") or f.endswith(".faa")
+    ]
     logger.info(f"  cross-genome: {xg_files}")
 
     # Check xg_ortholog_group column exists in integrated CSVs
     import pandas as pd
+
     for gdir in genome_outdirs:
         name = os.path.basename(gdir)
-        int_csvs = [f for f in os.listdir(gdir) if 'integrated' in f and f.endswith('.csv')]
+        int_csvs = [
+            f for f in os.listdir(gdir) if "integrated" in f and f.endswith(".csv")
+        ]
         for csv_f in int_csvs:
             df = pd.read_csv(os.path.join(gdir, csv_f))
-            has_xg = 'xg_ortholog_group' in df.columns
-            logger.info(f"  {name}/{csv_f}: xg_ortholog_group={'YES' if has_xg else 'NO'}, "
-                        f"rows={len(df)}, cols={len(df.columns)}")
+            has_xg = "xg_ortholog_group" in df.columns
+            logger.info(
+                f"  {name}/{csv_f}: xg_ortholog_group={'YES' if has_xg else 'NO'}, "
+                f"rows={len(df)}, cols={len(df.columns)}"
+            )
 
     if n_ok < n_total:
         logger.warning(f"SOME STEPS FAILED: {n_total - n_ok} failures")
@@ -160,5 +172,5 @@ def main():
         logger.info("ALL STEPS PASSED")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

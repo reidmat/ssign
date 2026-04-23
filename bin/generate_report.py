@@ -6,15 +6,13 @@ annotation tool coverage, and key parameters.
 """
 
 import argparse
-import csv
-import glob
 import logging
 import os
 from collections import Counter
 
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +27,7 @@ def generate_text_report(master_csvs, enrichment_file, output_path):
             logger.warning(f"Could not read {f}: {e}")
 
     if not dfs:
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             f.write("ssign Report\n============\nNo results to report.\n")
         return
 
@@ -46,10 +44,10 @@ def generate_text_report(master_csvs, enrichment_file, output_path):
     ]
 
     # SS type distribution
-    if 'nearby_ss_types' in df.columns:
+    if "nearby_ss_types" in df.columns:
         ss_counts = Counter()
-        for val in df['nearby_ss_types'].dropna():
-            for ss in str(val).split(','):
+        for val in df["nearby_ss_types"].dropna():
+            for ss in str(val).split(","):
                 ss = ss.strip()
                 if ss:
                     ss_counts[ss] += 1
@@ -60,13 +58,20 @@ def generate_text_report(master_csvs, enrichment_file, output_path):
         lines.append("")
 
     # Tool coverage
-    tool_cols = [c for c in df.columns if c.startswith(('blastp_', 'foldseek_',
-                 'interpro_', 'pfam_', 'pdb_', 'ecod70_', 'signalp_'))]
+    tool_cols = [
+        c
+        for c in df.columns
+        if c.startswith(
+            ("blastp_", "interpro_", "pfam_", "pdb_", "ecod70_", "signalp_")
+        )
+    ]
     if tool_cols:
         lines.append("Annotation tool coverage:")
         for col in sorted(tool_cols):
             n_hits = df[col].notna().sum()
-            lines.append(f"  {col}: {n_hits}/{len(df)} ({100*n_hits/max(len(df),1):.1f}%)")
+            lines.append(
+                f"  {col}: {n_hits}/{len(df)} ({100 * n_hits / max(len(df), 1):.1f}%)"
+            )
         lines.append("")
 
     # Enrichment summary
@@ -77,8 +82,8 @@ def generate_text_report(master_csvs, enrichment_file, output_path):
 
     lines.append("=" * 60)
 
-    with open(output_path, 'w') as f:
-        f.write('\n'.join(lines))
+    with open(output_path, "w") as f:
+        f.write("\n".join(lines))
 
     logger.info(f"Wrote text report to {output_path}")
 
@@ -86,7 +91,7 @@ def generate_text_report(master_csvs, enrichment_file, output_path):
 def generate_html_report(master_csvs, enrichment_file, output_path):
     """Generate HTML summary report."""
     # Simple HTML wrapping the text report
-    text_path = output_path.replace('.html', '.txt')
+    text_path = output_path.replace(".html", ".txt")
     if os.path.exists(text_path):
         with open(text_path) as f:
             text_content = f.read()
@@ -114,7 +119,7 @@ def generate_html_report(master_csvs, enrichment_file, output_path):
 </body>
 </html>"""
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(html)
 
     logger.info(f"Wrote HTML report to {output_path}")
@@ -122,7 +127,7 @@ def generate_html_report(master_csvs, enrichment_file, output_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate ssign report")
-    parser.add_argument("--master-csvs", nargs='+', required=True)
+    parser.add_argument("--master-csvs", nargs="+", required=True)
     parser.add_argument("--enrichment", default="")
     parser.add_argument("--out-html", required=True)
     parser.add_argument("--out-txt", required=True)
@@ -132,5 +137,5 @@ def main():
     generate_html_report(args.master_csvs, args.enrichment, args.out_html)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
