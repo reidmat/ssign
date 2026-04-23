@@ -19,7 +19,7 @@ image, Zenodo-DOI'd. See [Roadmap to v1.0.0](#roadmap-to-v100).
 
 A public web service that lets you submit a genome in the browser and receive
 the full ssign report without installing anything locally is **planned for
-release alongside the v1.0.0 paper**. If you don't have the hardware or CLI
+release alongside v1.0.0**. If you don't have the hardware or CLI
 experience to run ssign yourself, that will be the easiest entry point. This
 section will be updated with the URL once the service is live.
 
@@ -62,7 +62,7 @@ extras (Bakta, DeepSecE, BLAST+), and dependency management — are in
 │    MacSyFinder v2 + TXSScan models → validated secretion systems        │
 │                                                                         │
 │  Stage 2: Secreted-Protein Prediction                                   │
-│    DeepLocPro + DeepSecE + SignalP (+ PLM-Effector in v1.0.0)          │
+│    DeepLocPro + DeepSecE + SignalP (+ PLM-Effector in v1.0.0)           │
 │    → candidate proteins + guilt-by-association with SS component        │
 │       neighborhoods                                                     │
 │                                                                         │
@@ -87,14 +87,11 @@ v1.0.0).
 
 ## Supported inputs
 
-| Format                      | Extensions              | Notes                                              |
-| --------------------------- | ----------------------- | -------------------------------------------------- |
-| **GenBank** _(recommended)_ | `.gbff`, `.gbk`, `.gb`  | Ships with gene annotations — skips ORF prediction |
-| FASTA contigs               | `.fasta`, `.fna`, `.fa` | Gene prediction via Pyrodigal (default) or Bakta   |
-| Protein FASTA               | `.faa`                  | Pre-translated proteins — used directly            |
-
-GFF3/GTF pairs are supported via the CLI only (not the browser uploader) —
-they require a companion FASTA that the browser cannot pair safely.
+| Format                      | Extensions              |
+| --------------------------- | ----------------------- |
+| Genbank                     | `.gbff`, `.gbk`, `.gb`  |
+| FASTA contigs               | `.fasta`, `.fna`, `.fa` |
+| Protein FASTA               | `.faa`                  |
 
 ---
 
@@ -282,7 +279,7 @@ ssign is distributed under the **GNU General Public License v3.0 or later**
 
 ## Authors
 
-- **M. Teo Reid** — primary author. Department of Bioengineering, Imperial
+- **M. Teo Reid** — Department of Bioengineering, Imperial
   College London. ORCID: [0009-0009-9239-5743](https://orcid.org/0009-0009-9239-5743)
 - **Owen Terpstra** — Molecular Microbiology, University of Groningen.
   ORCID: [0000-0002-8767-4061](https://orcid.org/0000-0002-8767-4061)
