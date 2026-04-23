@@ -17,14 +17,9 @@ image, Zenodo-DOI'd. See [Roadmap to v1.0.0](#roadmap-to-v100).
 
 ## 🌐 Hosted web service — coming soon
 
-A public web service that lets you submit a genome in the browser and receive
-the full ssign report without installing anything locally is **planned for
-release alongside v1.0.0**. If you don't have the hardware or CLI
-experience to run ssign yourself, that will be the easiest entry point. This
-section will be updated with the URL once the service is live.
-
-In the meantime, you can run ssign locally (below) or via Google Colab (see
-[`colab/`](colab/), notebook shipping with v1.0.0).
+A public web service for browser-based genome submission is planned
+alongside v1.0.0. Until then, run ssign locally (below) or via Google Colab
+(see [`colab/`](colab/), notebook ships with v1.0.0).
 
 ---
 
@@ -47,10 +42,8 @@ pipeline. Command-line mode is also supported (see `ssign --help`).
 **System requirements:** Linux or macOS, Python ≥ 3.10. CUDA-capable GPU
 recommended for DeepSecE and (in v1.0.0) PLM-Effector.
 
-**Full install instructions** — including WSL on Windows, optional tool
-extras (Bakta, DeepSecE, BLAST+), and dependency management — are in
-[`docs/optional_tools.md`](docs/optional_tools.md). Will be restructured into
-`docs/how-to/install.md` at v1.0.0.
+Full install instructions (WSL, optional tool extras, dependency management)
+in [`docs/optional_tools.md`](docs/optional_tools.md).
 
 ---
 
@@ -79,9 +72,8 @@ extras (Bakta, DeepSecE, BLAST+), and dependency management — are in
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Detailed description of each stage, threshold choices, and tool selection
-rationale lives in [`docs/`](docs/) (will be restructured per Diataxis at
-v1.0.0).
+Per-stage detail, threshold choices, and tool-selection rationale in
+[`docs/`](docs/).
 
 ---
 
@@ -126,9 +118,8 @@ All configurable in the GUI or via CLI flags. Full parameter reference in
 
 ## Install tiers
 
-ssign ships in three tiers. Pick the one that matches your storage capacity
-and use case. You can always upgrade later by running the tier-aware database
-fetcher with a new `--tier`.
+ssign ships in three tiers — pick the one matching your storage budget.
+Upgrade later by re-running the database fetcher with a new `--tier`.
 
 | Tier         | Disk    | What's included                                                                                   | Install                       |
 | ------------ | ------- | ------------------------------------------------------------------------------------------------- | ----------------------------- |
@@ -136,28 +127,25 @@ fetcher with a new `--tier`.
 | **extended** | ~130 GB | base + EggNOG + HH-suite (Pfam + PDB70) + InterProScan + pLM-BLAST                                | `pip install ssign[extended]` |
 | **full**     | ~630 GB | extended + BLAST NR + Bakta full DB + HH-suite UniRef30                                           | `pip install ssign[full]`     |
 
-After pip install, download the matching database bundle:
+After pip install, fetch the matching database bundle (pulled from pinned
+Zenodo DOIs for long-term reproducibility):
 
 ```bash
 bash scripts/fetch_databases.sh --tier base       # or: extended / full
 ```
 
-The fetcher pulls from **pinned Zenodo DOIs** — identical bytes on every
-run, forever. See [`data/README.md`](data/README.md) for what each tier
-downloads.
+See [`data/README.md`](data/README.md) for per-tier contents.
 
 ### pip vs Docker
 
-Pick one of:
+- **pip** — installs into your Python environment; depends on local Python,
+  CUDA, and system libraries staying compatible.
+- **Docker** (`docker pull billerbeck-lab/ssign:1.0.0`, available from
+  v1.0.0) — SHA-pinned, reproducible for 5+ years. Recommended for
+  paper-reproducibility and webserver deployments.
 
-- **pip** (the commands above) — installs into your Python environment. Flexible
-  but depends on your system's Python, CUDA, and libraries staying compatible.
-- **Docker** (`docker pull billerbeck-lab/ssign:1.0.0`) — frozen SHA-pinned
-  environment, guaranteed reproducible for 5+ years. Recommended for paper-
-  reproducibility and webserver deployments. Available from v1.0.0 onwards.
-
-Both pip and Docker work with any install tier — the tier is controlled by
-which database bundle you fetch, not by which environment you choose.
+Tier is chosen by the database bundle you fetch, not by pip vs Docker —
+both work with any tier.
 
 ### Cherry-picking individual tools
 
@@ -186,30 +174,46 @@ conda install -c bioconda hhsuite
 # See docs/optional_tools.md for step-by-step instructions.
 ```
 
-Full platform-specific install guide: [`docs/optional_tools.md`](docs/optional_tools.md)
-(will migrate to `docs/how-to/install.md` at v1.0.0).
+Full platform-specific install guide: [`docs/optional_tools.md`](docs/optional_tools.md).
 
 ---
 
 ## Roadmap to v1.0.0
 
-v1.0.0 is the publication release and will include:
+v1.0.0 is the publication release. Planned work:
 
-- **Fully offline operation** — no external API dependencies. All tools run
-  from local binaries and databases. The current baseline still uses BioLib
-  (DeepLocPro, SignalP), NCBI remote BLAST, EBI InterProScan, and the MPI
-  Toolkit HHpred web service — all replaced or made local for v1.0.0.
-- **New tools** — Bakta + EggNOG (whole-genome), PLM-Effector (first-class
-  prediction), pLM-BLAST / ECOD70 (substrate annotation).
+**Pipeline**
+
+- **Fully offline operation** — replaces BioLib (DeepLocPro, SignalP), NCBI
+  remote BLAST, EBI InterProScan, and the MPI Toolkit HHpred service with
+  local binaries and databases.
+- **New tools** — Bakta + EggNOG (whole-genome annotation), PLM-Effector
+  (first-class secreted-protein prediction), pLM-BLAST / ECOD70 (substrate
+  annotation).
+- **Re-annotate by default with Bakta** — uniform annotation across a cohort;
+  opt out via `--use-input-annotations` for curated GenBanks.
+- **Cross-validation rule change** — DLP, DSE, and PLM-Effector treated as
+  equal secretion predictors (any one flagging = candidate). SignalP becomes
+  evidence-only. New `n_prediction_tools_agreeing` column.
+- **Pipeline order** — `enrichment_testing` moves before
+  `filter_by_stats_and_dlp`; stats filter default ON for ≥10 genomes.
+
+**Packaging and distribution**
+
 - **Docker bundle image** — SHA-pinned, reproducible for 5+ years, published
   to Docker Hub / GHCR.
 - **Zenodo deposits** — separate DOIs for source code, model weights, and
-  database bundle. Paper cites all three.
-- **FAIR-compliant repository layout** — per the
-  [FAIR4RS principles](https://doi.org/10.1038/s41597-022-01710-x) (Barker
-  et al. 2022, _Scientific Data_).
-- **Public hosted web service** (post-publication) — Flask-based, BLAST-style
-  submission form, job queue, results page.
+  database bundle; paper cites all three.
+- **Tier-aware database fetcher** — `scripts/fetch_databases.sh --tier
+{base,extended,full}` pulling from pinned Zenodo DOIs.
+- **FAIR-compliant repository layout** per
+  [FAIR4RS](https://doi.org/10.1038/s41597-022-01710-x) (Barker et al. 2022,
+  _Scientific Data_).
+- **Diataxis documentation** — tutorials / how-to / reference / explanation.
+- **`bio.tools` registration** for FAIR findability.
+
+**Hosted web service (post-publication)** — Flask-based submission form,
+job queue, results page.
 
 Track progress in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -217,18 +221,16 @@ Track progress in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Citing ssign
 
-If you use ssign in your research, please cite the software itself in addition
-to the underlying tools. At v1.0.0 we will have a Zenodo DOI and, once the
-manuscript is published, a paper DOI — both will be listed here. For the
-pre-publication baseline, cite via [`CITATION.cff`](CITATION.cff) or the
-GitHub tag `v0.9.0-prerefactor`.
+Cite via [`CITATION.cff`](CITATION.cff) or the GitHub tag
+`v0.9.0-prerefactor`. Zenodo and paper DOIs will be added here at v1.0.0
+release.
 
 ---
 
 ## Citing the underlying tools
 
-ssign integrates many excellent open-source tools. If your analysis uses a
-given tool, please cite it alongside ssign.
+ssign integrates many open-source tools. Please cite any tool your analysis
+uses alongside ssign.
 
 <details>
 <summary>Full list (click to expand)</summary>

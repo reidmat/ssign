@@ -35,14 +35,6 @@ deposit exceeds Zenodo's per-record size limit, it will be split across
 multiple linked records, or hosted on Imperial's Research Data Store with a
 persistent URL and checksum manifest.
 
-## Provenance — original data used in the paper
-
-Analysis inputs used to generate figures and validation sets for the ssign
-paper (Reid et al., _in preparation_) are listed here. Raw data is not
-redistributed via this repo; each dataset has a persistent source.
-
-- _List to be populated in Phase 3–8 as analysis is finalised._
-
 ## Integrity checking
 
 Every file delivered via `fetch_databases.sh` has an SHA-256 checksum recorded

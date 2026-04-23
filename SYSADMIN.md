@@ -1,19 +1,15 @@
 # SYSADMIN.md — Operational runbook for the ssign hosted service
 
-This document is the **operational runbook** for the person maintaining the
-ssign hosted web service after the original author (Teo Reid) has left Imperial.
-It is deliberately written for a moderately technical lab member, not a
-professional sysadmin.
+Runbook for the lab member maintaining the ssign hosted web service after the
+original author (Teo Reid) leaves Imperial. Written for a moderately
+technical lab member, not a professional sysadmin.
 
-> **Scope:** this file covers the public web service only. The ssign _pipeline
-> itself_ (the code you `pip install` or `docker run`) is documented under
-> `docs/`. If you only want to run ssign on your own machine, you do **not**
-> need this document.
-
-> **Status — 2026-04-22:** this is a **skeleton**. Each section will be
-> expanded with exact commands, credentials locations, and contact details as
-> the hosted service is built out (post-publication, separate plan). If a
-> section says "to be filled in", the infrastructure for it does not exist yet.
+> **Scope:** public web service only. The ssign pipeline (what you
+> `pip install` or `docker run`) is documented under [`docs/`](docs/).
+>
+> **Status — 2026-04-22:** skeleton. Sections marked "to be filled in" will
+> be expanded as the hosted service is built out (post-publication,
+> separate plan).
 
 ---
 

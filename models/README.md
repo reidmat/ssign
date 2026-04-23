@@ -30,10 +30,9 @@ mirroring to Zenodo before release is part of the longevity mitigation stack
 
 ## DTU academic-licensed models
 
-`SignalP 6.0` and `DeepLocPro` are distributed under DTU academic licenses
-that may restrict redistribution. If the Docker bundle image cannot ship them
-directly, the install docs will document how to register with DTU and install
-them separately before running the pipeline.
+`SignalP 6.0` and `DeepLocPro` are under DTU academic licenses that may
+restrict redistribution. If the Docker bundle cannot ship them directly,
+install docs will cover DTU registration + separate install.
 
 ## Integrity checking
 
