@@ -30,7 +30,8 @@ st.set_page_config(
 )
 
 # Dark-mode compatible styling — uses Streamlit CSS variables
-st.markdown("""
+st.markdown(
+    """
 <style>
     .stDeployButton { display: none; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
@@ -49,13 +50,17 @@ st.markdown("""
         border-bottom: 1px solid var(--secondary-background-color, #E8EEF2);
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # Custom connection error — use setInterval to periodically check for and
 # replace Streamlit's generic error message. MutationObserver can fail if the
 # iframe or observer gets destroyed during connection loss.
 import streamlit.components.v1 as components
-components.html('''
+
+components.html(
+    """
 <script>
 (function() {
     var doc;
@@ -76,7 +81,9 @@ components.html('''
     }, 500);
 })();
 </script>
-''', height=0)
+""",
+    height=0,
+)
 
 # ─────────────────────────────────────────────────────────────────────
 # Session state defaults
@@ -95,6 +102,7 @@ def _has_previous_progress(outdir_val: str) -> bool:
     if not outdir_val or not os.path.isdir(outdir_val):
         return False
     import glob
+
     ssign_dir = os.path.join(outdir_val, ".ssign")
     return bool(
         glob.glob(os.path.join(ssign_dir, "*_progress.json"))
@@ -135,7 +143,7 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
 
     # ── 1. Merge normal results CSVs (chunked format) ──
     # The per-genome CSVs have comment-header chunks separated by blank lines
-    all_chunks = {'proteins': [], 'ss_with': [], 'ss_other': []}
+    all_chunks = {"proteins": [], "ss_with": [], "ss_other": []}
     for sid in sample_names:
         csv_path = os.path.join(outdir, f"{sid}_results.csv")
         if not os.path.exists(csv_path):
@@ -147,31 +155,32 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
         # Parse chunks by comment headers
         current_chunk = None
         current_lines = []
-        for line in content.split('\n'):
-            if line.startswith('# Secreted Proteins'):
+        for line in content.split("\n"):
+            if line.startswith("# Secreted Proteins"):
                 if current_chunk and current_lines:
-                    all_chunks[current_chunk].append('\n'.join(current_lines))
-                current_chunk = 'proteins'
+                    all_chunks[current_chunk].append("\n".join(current_lines))
+                current_chunk = "proteins"
                 current_lines = []
-            elif line.startswith('# Secretion Systems (with'):
+            elif line.startswith("# Secretion Systems (with"):
                 if current_chunk and current_lines:
-                    all_chunks[current_chunk].append('\n'.join(current_lines))
-                current_chunk = 'ss_with'
+                    all_chunks[current_chunk].append("\n".join(current_lines))
+                current_chunk = "ss_with"
                 current_lines = []
-            elif line.startswith('# Secretion Systems (other'):
+            elif line.startswith("# Secretion Systems (other"):
                 if current_chunk and current_lines:
-                    all_chunks[current_chunk].append('\n'.join(current_lines))
-                current_chunk = 'ss_other'
+                    all_chunks[current_chunk].append("\n".join(current_lines))
+                current_chunk = "ss_other"
                 current_lines = []
             elif line.strip():
                 current_lines.append(line)
         if current_chunk and current_lines:
-            all_chunks[current_chunk].append('\n'.join(current_lines))
+            all_chunks[current_chunk].append("\n".join(current_lines))
 
         os.remove(csv_path)
 
     # Concatenate each chunk type across genomes
     import io as _io
+
     merged = {}
     for key, blocks in all_chunks.items():
         dfs = []
@@ -185,23 +194,23 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
             merged[key] = pd.concat(dfs, ignore_index=True)
 
     combined_csv = os.path.join(outdir, "ssign_results.csv")
-    with open(combined_csv, 'w', newline='') as f:
+    with open(combined_csv, "w", newline="") as f:
         written = False
-        if 'proteins' in merged and not merged['proteins'].empty:
-            f.write('# Secreted Proteins\n')
-            merged['proteins'].to_csv(f, index=False)
+        if "proteins" in merged and not merged["proteins"].empty:
+            f.write("# Secreted Proteins\n")
+            merged["proteins"].to_csv(f, index=False)
             written = True
-        if 'ss_with' in merged and not merged['ss_with'].empty:
+        if "ss_with" in merged and not merged["ss_with"].empty:
             if written:
-                f.write('\n')
-            f.write('# Secretion Systems (with secreted proteins)\n')
-            merged['ss_with'].to_csv(f, index=False)
+                f.write("\n")
+            f.write("# Secretion Systems (with secreted proteins)\n")
+            merged["ss_with"].to_csv(f, index=False)
             written = True
-        if 'ss_other' in merged and not merged['ss_other'].empty:
+        if "ss_other" in merged and not merged["ss_other"].empty:
             if written:
-                f.write('\n')
-            f.write('# Secretion Systems (other)\n')
-            merged['ss_other'].to_csv(f, index=False)
+                f.write("\n")
+            f.write("# Secretion Systems (other)\n")
+            merged["ss_other"].to_csv(f, index=False)
 
     # ── 2. Merge raw results CSVs ──
     raw_dfs = []
@@ -215,7 +224,8 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
             os.remove(raw_path)
     if raw_dfs:
         pd.concat(raw_dfs, ignore_index=True).to_csv(
-            os.path.join(outdir, "ssign_results_raw.csv"), index=False)
+            os.path.join(outdir, "ssign_results_raw.csv"), index=False
+        )
 
     # ── 2. Merge summary texts ──
     summary_parts = []
@@ -226,19 +236,25 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
         with open(txt_path) as f:
             content = f.read()
         if len(sample_names) > 1:
-            summary_parts.append(
-                f"\n{'=' * 60}\n  {sid}\n{'=' * 60}\n\n{content}"
-            )
+            summary_parts.append(f"\n{'=' * 60}\n  {sid}\n{'=' * 60}\n\n{content}")
         else:
             summary_parts.append(content)
         os.remove(txt_path)
 
     if summary_parts:
-        with open(os.path.join(outdir, "ssign_summary.txt"), 'w') as f:
+        with open(os.path.join(outdir, "ssign_summary.txt"), "w") as f:
             # Cross-genome summary header
-            if len(sample_names) > 1 and 'proteins' in merged and not merged['proteins'].empty:
-                df_all = merged['proteins']
-                n_genomes = df_all['sample_id'].nunique() if 'sample_id' in df_all.columns else len(sample_names)
+            if (
+                len(sample_names) > 1
+                and "proteins" in merged
+                and not merged["proteins"].empty
+            ):
+                df_all = merged["proteins"]
+                n_genomes = (
+                    df_all["sample_id"].nunique()
+                    if "sample_id" in df_all.columns
+                    else len(sample_names)
+                )
                 n_total = len(df_all)
                 avg_per_genome = n_total / n_genomes if n_genomes > 0 else 0
 
@@ -249,15 +265,15 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
                 f.write(f"Total secreted proteins: {n_total}\n")
                 f.write(f"Average per genome: {avg_per_genome:.1f}\n\n")
 
-                if 'nearby_ss_types' in df_all.columns:
+                if "nearby_ss_types" in df_all.columns:
                     f.write("Secreted proteins by SS type (total across genomes):\n")
-                    for ss, count in df_all['nearby_ss_types'].value_counts().items():
+                    for ss, count in df_all["nearby_ss_types"].value_counts().items():
                         f.write(f"  {ss}: {count}\n")
                     f.write("\n")
 
-                if 'broad_annotation' in df_all.columns:
-                    non_empty = df_all['broad_annotation'].dropna()
-                    non_empty = non_empty[non_empty != '']
+                if "broad_annotation" in df_all.columns:
+                    non_empty = df_all["broad_annotation"].dropna()
+                    non_empty = non_empty[non_empty != ""]
                     if not non_empty.empty:
                         f.write("Most common annotations:\n")
                         for ann, count in non_empty.value_counts().head(10).items():
@@ -266,7 +282,7 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
 
                 f.write("\n")
 
-            f.write('\n'.join(summary_parts))
+            f.write("\n".join(summary_parts))
 
     # ── 3. Regenerate combined figures from merged data ──
     # Remove per-genome figure subdirectories
@@ -279,13 +295,21 @@ def _merge_genome_outputs(outdir: str, sample_names: list[str]):
     if os.path.exists(raw_csv):
         try:
             from ssign_app.core.runner import run_script
-            run_script("generate_figures.py", [
-                "--master-csvs", raw_csv,
-                "--outdir", os.path.join(outdir, "figures"),
-                "--dpi", "300",
-            ])
+
+            run_script(
+                "generate_figures.py",
+                [
+                    "--master-csvs",
+                    raw_csv,
+                    "--outdir",
+                    os.path.join(outdir, "figures"),
+                    "--dpi",
+                    "300",
+                ],
+            )
         except Exception:
             pass
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Header
@@ -355,7 +379,7 @@ with st.sidebar:
 
     st.markdown("**4. Generate Data & Figures**")
     st.caption(
-        "Produces publication-ready figures and summary tables for the identified "
+        "Produces summary figures and result tables for the identified "
         "secreted proteins and their annotations."
     )
 
@@ -411,6 +435,7 @@ with st.sidebar:
 
     st.divider()
     from ssign_app import __version__
+
     st.caption(f"ssign v{__version__} | GPLv3 | Billerbeck Lab")
     st.markdown(
         "[GitHub](https://github.com/reidmat/ssign) · "
@@ -422,9 +447,9 @@ with st.sidebar:
 # Tabs
 # ─────────────────────────────────────────────────────────────────────
 
-tab_upload, tab_pipeline, tab_run = st.tabs([
-    "Upload & Configure", "Pipeline Overview", "Run & Results"
-])
+tab_upload, tab_pipeline, tab_run = st.tabs(
+    ["Upload & Configure", "Pipeline Overview", "Run & Results"]
+)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -462,9 +487,9 @@ with tab_upload:
         sample_names = []
         for f in uploaded_files:
             sn = f.name
-            for suffix in ['.gbff', '.gbk', '.gb', '.fasta', '.fna', '.fa', '.faa']:
-                sn = sn.replace(suffix, '')
-            sn = sn.replace('_genomic', '')
+            for suffix in [".gbff", ".gbk", ".gb", ".fasta", ".fna", ".fa", ".faa"]:
+                sn = sn.replace(suffix, "")
+            sn = sn.replace("_genomic", "")
             sample_names.append(sn)
         if len(uploaded_files) == 1:
             st.session_state.sample_name = sample_names[0]
@@ -482,11 +507,12 @@ with tab_upload:
             per_genome_orgs = {}
             for f in uploaded_files:
                 ext_lower = Path(f.name).suffix.lower()
-                if ext_lower not in ('.gbff', '.gbk', '.gb'):
+                if ext_lower not in (".gbff", ".gbk", ".gb"):
                     continue
                 try:
                     from Bio import SeqIO
                     import io
+
                     f.seek(0)
                     content = f.read().decode("utf-8", errors="replace")
                     f.seek(0)
@@ -497,19 +523,23 @@ with tab_upload:
                     if not org_name or len(org_name.split()) < 2:
                         for feat in record.features:
                             if feat.type == "source":
-                                src_org = feat.qualifiers.get("organism", [""])[0].strip()
+                                src_org = feat.qualifiers.get("organism", [""])[
+                                    0
+                                ].strip()
                                 if src_org and len(src_org.split()) >= 2:
                                     org_name = src_org
                                 break
                     if not org_name or len(org_name.split()) < 2:
                         stem = Path(f.name).stem
-                        for sfx in ('_genomic', '_protein', '_cds', '_rna'):
-                            stem = stem.replace(sfx, '')
-                        parts = stem.replace('_', ' ').split()
-                        if (len(parts) >= 2
-                                and parts[0][0].isupper()
-                                and parts[1][0].islower()
-                                and parts[1].isalpha()):
+                        for sfx in ("_genomic", "_protein", "_cds", "_rna"):
+                            stem = stem.replace(sfx, "")
+                        parts = stem.replace("_", " ").split()
+                        if (
+                            len(parts) >= 2
+                            and parts[0][0].isupper()
+                            and parts[1][0].islower()
+                            and parts[1].isalpha()
+                        ):
                             org_name = f"{parts[0]} {parts[1]}"
                     if org_name:
                         per_genome_orgs[f.name] = org_name
@@ -534,15 +564,19 @@ with tab_upload:
         bakta_available = shutil.which("bakta") is not None
         use_bakta = st.checkbox(
             "Use Bakta for ORF prediction (raw FASTA input only)",
-            value=False, key="use_bakta",
+            value=False,
+            key="use_bakta",
             disabled=not bakta_available,
             help="Bakta provides richer genome annotation than Prodigal, including "
-                 "gene names and functional descriptions. Only needed for raw FASTA input.",
+            "gene names and functional descriptions. Only needed for raw FASTA input.",
         )
         if bakta_available:
             if use_bakta:
-                st.text_input("Bakta database path", key="bakta_db_path",
-                              placeholder="/path/to/bakta_db")
+                st.text_input(
+                    "Bakta database path",
+                    key="bakta_db_path",
+                    placeholder="/path/to/bakta_db",
+                )
         else:
             st.info(
                 "**Bakta is not installed** but is optional for raw FASTA input.\n\n"
@@ -558,7 +592,7 @@ with tab_upload:
             value=outdir_default,
             key="outdir_input",
             help="All results, figures, and intermediate files will be saved here. "
-                 "The directory will be created if it doesn't exist.",
+            "The directory will be created if it doesn't exist.",
         )
         # Output directory validation
         if outdir:
@@ -576,12 +610,12 @@ with tab_upload:
     outdir_val = st.session_state.get("outdir_input", "")
     if outdir_val and _has_previous_progress(outdir_val):
         try:
-            import json, glob as _glob
+            import json
+            import glob as _glob
+
             # Collect per-genome progress files from .ssign/ subdirectory
             ssign_dir = os.path.join(outdir_val, ".ssign")
-            prog_files = sorted(
-                _glob.glob(os.path.join(ssign_dir, "*_progress.json"))
-            )
+            prog_files = sorted(_glob.glob(os.path.join(ssign_dir, "*_progress.json")))
             # Legacy: progress files in outdir root
             if not prog_files:
                 prog_files = sorted(
@@ -606,7 +640,11 @@ with tab_upload:
                 total_steps += len(prev_steps)
                 sid = prev.get("sample_id", "unknown")
                 latest_time = prev.get("timestamp", latest_time)
-                status = "complete" if n_done == len(prev_steps) else f"{n_done}/{len(prev_steps)} steps"
+                status = (
+                    "complete"
+                    if n_done == len(prev_steps)
+                    else f"{n_done}/{len(prev_steps)} steps"
+                )
                 genome_summaries.append(f"- **{sid}**: {status}")
                 # Keep the first genome's config as representative
                 if not saved_config and prev.get("config"):
@@ -617,7 +655,7 @@ with tab_upload:
             col_info, col_action = st.columns([3, 2])
             with col_info:
                 n_genomes = len(prog_files)
-                summary = '\n'.join(genome_summaries[:10])
+                summary = "\n".join(genome_summaries[:10])
                 if len(genome_summaries) > 10:
                     summary += f"\n- ...and {len(genome_summaries) - 10} more"
                 st.info(
@@ -629,9 +667,11 @@ with tab_upload:
             with col_action:
                 run_mode = st.radio(
                     "How to proceed?",
-                    ["Resume (skip completed steps)",
-                     "Start fresh (rerun everything)",
-                     "Selective rerun (choose steps)"],
+                    [
+                        "Resume (skip completed steps)",
+                        "Start fresh (rerun everything)",
+                        "Selective rerun (choose steps)",
+                    ],
                     key="run_mode_choice",
                     index=0,
                 )
@@ -639,17 +679,17 @@ with tab_upload:
             # Restore saved tool settings when resuming
             if saved_config and run_mode and "Resume" in run_mode:
                 _cfg_to_session = {
-                    'skip_hhsuite': ('run_hh', lambda v: not v),
-                    'skip_blastp': ('run_blastp', lambda v: not v),
-                    'skip_interproscan': ('run_iprs', lambda v: not v),
-                    'skip_signalp': ('run_signalp', lambda v: not v),
-                    'skip_deepsece': ('run_deepsece', lambda v: not v),
-                    'skip_protparam': ('run_protparam', lambda v: not v),
-                    'conf_threshold': ('conf_threshold', None),
-                    'wholeness_threshold': ('wholeness_threshold', None),
-                    'proximity_window': ('proximity_window', None),
-                    'blastp_min_pident': ('blastp_min_pident', None),
-                    'blastp_evalue': ('blastp_evalue', None),
+                    "skip_hhsuite": ("run_hh", lambda v: not v),
+                    "skip_blastp": ("run_blastp", lambda v: not v),
+                    "skip_interproscan": ("run_iprs", lambda v: not v),
+                    "skip_signalp": ("run_signalp", lambda v: not v),
+                    "skip_deepsece": ("run_deepsece", lambda v: not v),
+                    "skip_protparam": ("run_protparam", lambda v: not v),
+                    "conf_threshold": ("conf_threshold", None),
+                    "wholeness_threshold": ("wholeness_threshold", None),
+                    "proximity_window": ("proximity_window", None),
+                    "blastp_min_pident": ("blastp_min_pident", None),
+                    "blastp_evalue": ("blastp_evalue", None),
                 }
                 restored = []
                 for cfg_key, (session_key, transform) in _cfg_to_session.items():
@@ -660,9 +700,13 @@ with tab_upload:
                         st.session_state[session_key] = val
                         restored.append(session_key)
                 if restored:
-                    st.caption(f"Restored settings from previous run: {', '.join(restored)}")
+                    st.caption(
+                        f"Restored settings from previous run: {', '.join(restored)}"
+                    )
             if run_mode and "Selective" in run_mode:
-                st.markdown("**Select steps to rerun** (unchecked = keep previous result):")
+                st.markdown(
+                    "**Select steps to rerun** (unchecked = keep previous result):"
+                )
                 cols = st.columns(3)
                 for i, step in enumerate(prev_steps):
                     with cols[i % 3]:
@@ -683,7 +727,6 @@ with tab_pipeline:
     if _needs_run_mode_gate():
         st.warning(_GATE_MSG)
     else:
-
         # ──────────────────────────────────────────────────────────────
         # Stage 1: Secretion System Identification
         # ──────────────────────────────────────────────────────────────
@@ -695,24 +738,38 @@ with tab_pipeline:
             "MacSyFinder searches for conserved secretion system components using "
             "HMM profiles. Systems that meet the completeness threshold are retained.",
             help="MacSyFinder identifies macromolecular systems by searching for sets "
-                 "of co-occurring protein components using HMM profiles and genetic "
-                 "organization rules defined in TXSScan models.",
+            "of co-occurring protein components using HMM profiles and genetic "
+            "organization rules defined in TXSScan models.",
         )
 
         col1, col2 = st.columns(2)
         with col1:
             st.slider(
                 "System completeness threshold",
-                0.0, 1.0, 0.8, 0.05,
+                0.0,
+                1.0,
+                0.8,
+                0.05,
                 help="MacSyFinder wholeness score minimum. 0.8 = at least 80% of "
-                     "expected components must be present for a system to be called.",
+                "expected components must be present for a system to be called.",
                 key="wholeness",
             )
         with col2:
             all_system_types = [
-                "T1SS", "T2SS", "T3SS", "T4SS", "T5aSS", "T5bSS", "T5cSS",
-                "T6SSi", "T6SSii", "T6SSiii", "T9SS",
-                "Flagellum", "Tad", "pT4SSt",
+                "T1SS",
+                "T2SS",
+                "T3SS",
+                "T4SS",
+                "T5aSS",
+                "T5bSS",
+                "T5cSS",
+                "T6SSi",
+                "T6SSii",
+                "T6SSiii",
+                "T9SS",
+                "Flagellum",
+                "Tad",
+                "pT4SSt",
             ]
             st.multiselect(
                 "Exclude these system types",
@@ -720,8 +777,8 @@ with tab_pipeline:
                 default=["Flagellum", "Tad", "T3SS"],
                 key="excluded",
                 help="Flagellum and Tad are excluded because they are not true secretion "
-                     "systems. T3SS is excluded by default because DeepSecE T3SS "
-                     "predictions are unreliable (mostly flagellar misclassification).",
+                "systems. T3SS is excluded by default because DeepSecE T3SS "
+                "predictions are unreliable (mostly flagellar misclassification).",
             )
 
         st.divider()
@@ -737,8 +794,8 @@ with tab_pipeline:
             "Localization predictions verify that detected systems are correctly assembled "
             "and flag nearby proteins as potential secretion candidates.",
             help="Proteins within a configurable window (default: +/- 3 genes) of each "
-                 "secretion system component are extracted and evaluated using "
-                 "localization prediction tools.",
+            "secretion system component are extracted and evaluated using "
+            "localization prediction tools.",
         )
 
         # Proximity & thresholds
@@ -747,30 +804,40 @@ with tab_pipeline:
             with pc1:
                 st.slider(
                     "Proximity window (genes)",
-                    1, 15, 3,
+                    1,
+                    15,
+                    3,
                     help="How many genes upstream/downstream of each secretion system "
-                         "component to search for candidate secreted proteins.",
+                    "component to search for candidate secreted proteins.",
                     key="window",
                 )
             with pc2:
                 st.slider(
                     "DeepLocPro extracellular threshold",
-                    0.0, 1.0, 0.8, 0.05,
+                    0.0,
+                    1.0,
+                    0.8,
+                    0.05,
                     help="Minimum probability for a protein to be called extracellular "
-                         "by DeepLocPro.",
+                    "by DeepLocPro.",
                     key="conf",
                 )
             with pc3:
                 st.slider(
                     "Required fraction correctly localized",
-                    0.0, 1.0, 0.8, 0.05,
+                    0.0,
+                    1.0,
+                    0.8,
+                    0.05,
                     help="Fraction of secretion system components that must have correct "
-                         "predicted localization for the system to be considered valid.",
+                    "predicted localization for the system to be considered valid.",
                     key="frac",
                 )
 
         # ── Whole-genome prediction option ──
-        with st.expander("Advanced: Run predictions on entire proteome", expanded=False):
+        with st.expander(
+            "Advanced: Run predictions on entire proteome", expanded=False
+        ):
             st.warning(
                 "By default, predictions run only on proteins near detected secretion "
                 "systems (typically 50-200 proteins per genome). Enabling whole-genome "
@@ -783,23 +850,26 @@ with tab_pipeline:
             with wg1:
                 st.checkbox(
                     "DeepLocPro (whole genome)",
-                    value=False, key="dlp_whole_genome",
+                    value=False,
+                    key="dlp_whole_genome",
                     help="Run DeepLocPro on all proteins, not just those near "
-                         "secretion systems. Significantly increases runtime.",
+                    "secretion systems. Significantly increases runtime.",
                 )
             with wg2:
                 st.checkbox(
                     "DeepSecE (whole genome)",
-                    value=False, key="dse_whole_genome",
+                    value=False,
+                    key="dse_whole_genome",
                     help="Run DeepSecE on all proteins, not just those near "
-                         "secretion systems. Significantly increases runtime.",
+                    "secretion systems. Significantly increases runtime.",
                 )
             with wg3:
                 st.checkbox(
                     "SignalP (whole genome)",
-                    value=False, key="sp_whole_genome",
+                    value=False,
+                    key="sp_whole_genome",
                     help="Run SignalP on all proteins, not just those near "
-                         "secretion systems. Significantly increases runtime.",
+                    "secretion systems. Significantly increases runtime.",
                 )
 
         st.markdown("---")
@@ -810,9 +880,9 @@ with tab_pipeline:
             st.markdown(
                 "**DeepLocPro** — Subcellular Localization",
                 help="Predicts protein subcellular localization using protein language "
-                     "models. Used to verify secretion system components localize as "
-                     "expected, and to identify nearby extracellular proteins as "
-                     "secretion candidates.",
+                "models. Used to verify secretion system components localize as "
+                "expected, and to identify nearby extracellular proteins as "
+                "secretion candidates.",
             )
             st.caption(
                 "Predicts localization of secretion system components (secondary "
@@ -823,7 +893,7 @@ with tab_pipeline:
                 ["BioLib cloud (no install needed)", "Local install (DTU license)"],
                 key="dlp_mode",
                 help="BioLib cloud: free, no license required, ~5-10 min per genome. "
-                     "Local: faster, requires free DTU academic license + ~5 GB model.",
+                "Local: faster, requires free DTU academic license + ~5 GB model.",
             )
             if "Local" in dlp_mode:
                 dlp_found = shutil.which("deeplocpro") is not None
@@ -836,19 +906,17 @@ with tab_pipeline:
                         "Or use **cloud mode** (no install needed)."
                     )
             else:
-                st.caption(
-                    "Cloud mode (~5-10 min per genome, no setup needed)."
-                )
+                st.caption("Cloud mode (~5-10 min per genome, no setup needed).")
                 dlp_path = ""
 
         with col2:
             st.markdown(
                 "**SignalP 6.0** — Signal Peptides",
                 help="Predicts N-terminal signal peptides (Sec/SPI, Sec/SPII, Tat/SPI, "
-                     "Tat/SPII, PILIN) recognised by signal peptidases. Only useful for "
-                     "T2SS and T5SS substrates which use the Sec pathway to cross the "
-                     "inner membrane. T1SS, T3SS, T4SS, T6SS substrates do NOT have "
-                     "N-terminal signal peptides — SignalP will return 'OTHER' for them.",
+                "Tat/SPII, PILIN) recognised by signal peptidases. Only useful for "
+                "T2SS and T5SS substrates which use the Sec pathway to cross the "
+                "inner membrane. T1SS, T3SS, T4SS, T6SS substrates do NOT have "
+                "N-terminal signal peptides — SignalP will return 'OTHER' for them.",
             )
             st.caption(
                 "Detects Sec/Tat signal peptides — most useful for T2SS and T5SS. "
@@ -856,9 +924,11 @@ with tab_pipeline:
                 "and will be predicted as 'OTHER' (not a tool failure)."
             )
             run_signalp = st.checkbox(
-                "Enable SignalP 6.0", value=False, key="run_signalp",
+                "Enable SignalP 6.0",
+                value=False,
+                key="run_signalp",
                 help="Adds signal peptide predictions as an additional layer of evidence "
-                     "for secretion.",
+                "for secretion.",
             )
             if run_signalp:
                 sp_mode = st.radio(
@@ -866,7 +936,7 @@ with tab_pipeline:
                     ["BioLib cloud (no install needed)", "Local install (DTU license)"],
                     key="sp_mode",
                     help="BioLib cloud: free, ~2-5 min per genome. "
-                         "Local: faster, requires free DTU academic license.",
+                    "Local: faster, requires free DTU academic license.",
                 )
                 if "Local" in sp_mode:
                     sp_found = shutil.which("signalp6") is not None
@@ -882,9 +952,15 @@ with tab_pipeline:
                     st.caption("Cloud mode (~2-5 min per genome, no setup needed).")
                     sp_path = ""
                 with st.expander("SignalP threshold", expanded=False):
-                    st.slider("Min. probability", 0.0, 1.0, 0.5, 0.05,
-                              key="sp_min_prob",
-                              help="Minimum SignalP probability to call a signal peptide.")
+                    st.slider(
+                        "Min. probability",
+                        0.0,
+                        1.0,
+                        0.5,
+                        0.05,
+                        key="sp_min_prob",
+                        help="Minimum SignalP probability to call a signal peptide.",
+                    )
             else:
                 sp_mode = "BioLib cloud"
                 sp_path = ""
@@ -895,9 +971,9 @@ with tab_pipeline:
         st.markdown(
             "**DeepSecE** — Secretion Type Prediction",
             help="A deep-learning model that predicts which secretion system type "
-                 "each protein is secreted by. Cross-checks DeepLocPro localization "
-                 "predictions and can identify additional secreted proteins that "
-                 "DeepLocPro may miss. Does not work for T5SS autotransporters.",
+            "each protein is secreted by. Cross-checks DeepLocPro localization "
+            "predictions and can identify additional secreted proteins that "
+            "DeepLocPro may miss. Does not work for T5SS autotransporters.",
         )
         st.caption(
             "Secondary prediction of secreted proteins — cross-checks DeepLocPro "
@@ -909,26 +985,41 @@ with tab_pipeline:
         deepsece_checkpoint_ok = False
         try:
             import DeepSecE
+
             deepsece_available = True
             # Check if the model checkpoint exists (~2.5 GB)
-            _dse_ckpt = os.path.join(os.path.expanduser("~"), ".ssign", "models", "deepsece_checkpoint.pt")
-            deepsece_checkpoint_ok = os.path.isfile(_dse_ckpt) and os.path.getsize(_dse_ckpt) > 100_000_000
+            _dse_ckpt = os.path.join(
+                os.path.expanduser("~"), ".ssign", "models", "deepsece_checkpoint.pt"
+            )
+            deepsece_checkpoint_ok = (
+                os.path.isfile(_dse_ckpt) and os.path.getsize(_dse_ckpt) > 100_000_000
+            )
         except ImportError:
             pass
 
         if deepsece_available and deepsece_checkpoint_ok:
             st.success("DeepSecE is installed and ready.")
             run_deepsece = st.checkbox(
-                "Enable DeepSecE", value=True, key="run_deepsece",
+                "Enable DeepSecE",
+                value=True,
+                key="run_deepsece",
             )
             if run_deepsece:
                 with st.expander("DeepSecE threshold", expanded=False):
-                    st.slider("Min. probability", 0.0, 1.0, 0.8, 0.05,
-                              key="dse_min_prob",
-                              help="Minimum DeepSecE probability to call a protein as secreted.")
+                    st.slider(
+                        "Min. probability",
+                        0.0,
+                        1.0,
+                        0.8,
+                        0.05,
+                        key="dse_min_prob",
+                        help="Minimum DeepSecE probability to call a protein as secreted.",
+                    )
         elif deepsece_available and not deepsece_checkpoint_ok:
             run_deepsece = st.checkbox(
-                "Enable DeepSecE", value=False, key="run_deepsece",
+                "Enable DeepSecE",
+                value=False,
+                key="run_deepsece",
                 disabled=True,
             )
             _dse_path = os.path.join("~", ".ssign", "models", "deepsece_checkpoint.pt")
@@ -953,7 +1044,9 @@ with tab_pipeline:
             )
         else:
             run_deepsece = st.checkbox(
-                "Enable DeepSecE", value=False, key="run_deepsece",
+                "Enable DeepSecE",
+                value=False,
+                key="run_deepsece",
                 disabled=True,
             )
             st.info(
@@ -977,8 +1070,8 @@ with tab_pipeline:
             "tools can help resolve protein function. All run via **cloud APIs** by "
             "default — no local install needed. Uncheck to skip.",
             help="Each tool queries a different database or algorithm to add functional "
-                 "annotations to your secreted protein candidates. Running more tools "
-                 "takes longer but provides richer annotations.",
+            "annotations to your secreted protein candidates. Running more tools "
+            "takes longer but provides richer annotations.",
         )
         st.info(
             "If your genome is already well-annotated (e.g. from Bakta, Prokka, or "
@@ -994,10 +1087,12 @@ with tab_pipeline:
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
             run_blastp = st.checkbox(
-                "BLASTp", value=True, key="run_blastp",
+                "BLASTp",
+                value=True,
+                key="run_blastp",
                 help="Searches the NCBI nr (non-redundant) protein database for "
-                     "homologous proteins. Returns functional annotations, gene names, "
-                     "and descriptions from characterized homologs.",
+                "homologous proteins. Returns functional annotations, gene names, "
+                "and descriptions from characterized homologs.",
             )
         with col_info:
             if run_blastp:
@@ -1027,9 +1122,13 @@ with tab_pipeline:
 
                 if detected_organisms:
                     if len(detected_organisms) == 1:
-                        st.info(f"Detected organism: **{next(iter(detected_organisms))}**")
+                        st.info(
+                            f"Detected organism: **{next(iter(detected_organisms))}**"
+                        )
                     else:
-                        org_list = ", ".join(f"*{o}*" for o in sorted(detected_organisms))
+                        org_list = ", ".join(
+                            f"*{o}*" for o in sorted(detected_organisms)
+                        )
                         st.info(
                             f"Detected organisms: {org_list}\n\n"
                             "Taxonomy exclusion will be applied **per genome** — each "
@@ -1063,7 +1162,7 @@ with tab_pipeline:
                         key="blastp_taxid",
                         placeholder="e.g. 339 or 339,340,338",
                         help="Comma-separate multiple taxonomy IDs to exclude "
-                             "several organisms.",
+                        "several organisms.",
                     )
                 else:
                     st.session_state.blastp_exclusion_level = "none"
@@ -1080,59 +1179,91 @@ with tab_pipeline:
                 st.markdown("**Result filters:**")
                 bc1, bc2, bc3 = st.columns(3)
                 with bc1:
-                    st.slider("Min. % identity", 0, 100, 80, 5,
-                              key="blastp_pident",
-                              help="Minimum percent identity to keep a BLASTp hit.")
+                    st.slider(
+                        "Min. % identity",
+                        0,
+                        100,
+                        80,
+                        5,
+                        key="blastp_pident",
+                        help="Minimum percent identity to keep a BLASTp hit.",
+                    )
                 with bc2:
-                    st.slider("Min. query coverage (%)", 0, 100, 80, 5,
-                              key="blastp_qcov",
-                              help="Minimum query coverage to keep a BLASTp hit.")
+                    st.slider(
+                        "Min. query coverage (%)",
+                        0,
+                        100,
+                        80,
+                        5,
+                        key="blastp_qcov",
+                        help="Minimum query coverage to keep a BLASTp hit.",
+                    )
                 with bc3:
-                    st.number_input("E-value threshold", value=1e-5,
-                                    format="%.0e", key="blastp_evalue",
-                                    help="Maximum e-value for BLASTp hits.")
+                    st.number_input(
+                        "E-value threshold",
+                        value=1e-5,
+                        format="%.0e",
+                        key="blastp_evalue",
+                        help="Maximum e-value for BLASTp hits.",
+                    )
 
         # ── HHpred ──
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
             run_hh = st.checkbox(
-                "HHpred (Pfam + PDB)", value=True, key="run_hh",
+                "HHpred (Pfam + PDB)",
+                value=True,
+                key="run_hh",
                 help="Detects remote homology using profile-profile comparison via the "
-                     "MPI Bioinformatics Toolkit. Searches Pfam and PDB databases to "
-                     "find structural and functional domains even in highly diverged proteins.",
+                "MPI Bioinformatics Toolkit. Searches Pfam and PDB databases to "
+                "find structural and functional domains even in highly diverged proteins.",
             )
         with col_info:
             if run_hh:
                 st.caption("MPI Toolkit API | ~45-90 min per genome")
-                st.slider("Min. probability (%)", 0, 100, 40, 5,
-                          key="hhpred_min_prob",
-                          help="Minimum HHpred probability to keep a hit. "
-                               "Default 40% balances sensitivity and specificity.")
+                st.slider(
+                    "Min. probability (%)",
+                    0,
+                    100,
+                    40,
+                    5,
+                    key="hhpred_min_prob",
+                    help="Minimum HHpred probability to keep a hit. "
+                    "Default 40% balances sensitivity and specificity.",
+                )
 
         # ── InterProScan ──
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
             run_iprs = st.checkbox(
-                "InterProScan", value=True, key="run_iprs",
+                "InterProScan",
+                value=True,
+                key="run_iprs",
                 help="Scans proteins against InterPro's consortium of protein signature "
-                     "databases (Pfam, SMART, CDD, PANTHER, etc.) to identify domains, "
-                     "families, and Gene Ontology (GO) terms.",
+                "databases (Pfam, SMART, CDD, PANTHER, etc.) to identify domains, "
+                "families, and Gene Ontology (GO) terms.",
             )
         with col_info:
             if run_iprs:
                 st.caption("EBI REST API | ~20-40 min per genome")
-                st.number_input("E-value threshold", value=1e-5,
-                                format="%.0e", key="iprs_evalue",
-                                help="Maximum e-value for InterProScan domain hits.")
+                st.number_input(
+                    "E-value threshold",
+                    value=1e-5,
+                    format="%.0e",
+                    key="iprs_evalue",
+                    help="Maximum e-value for InterProScan domain hits.",
+                )
 
         # ── ProtParam ──
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
             run_pp = st.checkbox(
-                "ProtParam", value=True, key="run_pp",
+                "ProtParam",
+                value=True,
+                key="run_pp",
                 help="Computes physicochemical properties including molecular weight, "
-                     "isoelectric point (pI), GRAVY hydropathicity, instability index, "
-                     "and amino acid composition. Runs locally via BioPython — instant.",
+                "isoelectric point (pI), GRAVY hydropathicity, instability index, "
+                "and amino acid composition. Runs locally via BioPython — instant.",
             )
         with col_info:
             if run_pp:
@@ -1149,8 +1280,7 @@ with tab_pipeline:
 
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
-            st.checkbox("Foldseek", value=False, key="run_fs",
-                         disabled=True)
+            st.checkbox("Foldseek", value=False, key="run_fs", disabled=True)
         with col_info:
             st.caption(
                 "Structural homology search. Requires pre-computed 3D structures "
@@ -1160,8 +1290,7 @@ with tab_pipeline:
 
         col_check, col_info = st.columns([1.5, 3.5])
         with col_check:
-            st.checkbox("pLM-BLAST (ECOD70)", value=False, key="run_plm",
-                         disabled=True)
+            st.checkbox("pLM-BLAST (ECOD70)", value=False, key="run_plm", disabled=True)
         with col_info:
             st.caption(
                 "Protein language model-based remote homology detection. Requires "
@@ -1177,10 +1306,10 @@ with tab_pipeline:
 
         st.subheader("Stage 4: Generate Data & Figures")
         st.markdown(
-            "Produces summary tables and publication-ready figures for the identified "
+            "Produces result tables and summary figures for the identified "
             "secreted proteins and their annotations.",
             help="Figures are saved as SVG and PNG to the output directory. "
-                 "All results are also exported as CSV tables.",
+            "All results are also exported as CSV tables.",
         )
 
         st.markdown("**Figures:**")
@@ -1190,8 +1319,14 @@ with tab_pipeline:
             st.checkbox("SS composition", value=True, key="fig_ss_comp")
             st.checkbox("Tool coverage heatmap", value=True, key="fig_tool_heatmap")
         with fc2:
-            st.checkbox("Secreted protein count per genome", value=True, key="fig_substrate_count")
-            st.checkbox("Functional annotation summary", value=True, key="fig_func_summary")
+            st.checkbox(
+                "Secreted protein count per genome",
+                value=True,
+                key="fig_substrate_count",
+            )
+            st.checkbox(
+                "Functional annotation summary", value=True, key="fig_func_summary"
+            )
 
         st.markdown("---")
 
@@ -1208,18 +1343,28 @@ with tab_pipeline:
             )
             col1, col2 = st.columns(2)
             with col1:
-                st.slider("Min. % identity for ortholog grouping",
-                          0, 100, 40, 5,
-                          key="og_min_pident",
-                          help="Minimum percent identity between two proteins to "
-                               "consider them orthologs. Default 40% is permissive; "
-                               "increase for stricter groups.")
+                st.slider(
+                    "Min. % identity for ortholog grouping",
+                    0,
+                    100,
+                    40,
+                    5,
+                    key="og_min_pident",
+                    help="Minimum percent identity between two proteins to "
+                    "consider them orthologs. Default 40% is permissive; "
+                    "increase for stricter groups.",
+                )
             with col2:
-                st.slider("Min. query coverage (%) for ortholog grouping",
-                          0, 100, 70, 5,
-                          key="og_min_qcov",
-                          help="Minimum query coverage to consider a BLASTp hit "
-                               "as an ortholog relationship. Default 70%.")
+                st.slider(
+                    "Min. query coverage (%) for ortholog grouping",
+                    0,
+                    100,
+                    70,
+                    5,
+                    key="og_min_qcov",
+                    help="Minimum query coverage to consider a BLASTp hit "
+                    "as an ortholog relationship. Default 70%.",
+                )
         else:
             st.info(
                 "**BLAST+ is not installed** (needed for ortholog grouping).\n\n"
@@ -1274,7 +1419,7 @@ with tab_run:
         n_genomes = len(uploaded_files) or 1
         # Assume typical counts (refined once pipeline runs)
         est_neighborhood = 100  # typical neighborhood proteins per genome
-        est_secreted = 8        # typical secreted proteins per genome
+        est_secreted = 8  # typical secreted proteins per genome
 
         st.markdown("**Estimated run time:**")
         st.caption(
@@ -1286,7 +1431,11 @@ with tab_run:
         # Per-genome time breakdown
         base_min = 5  # MacSyFinder + local steps
         dlp_min = max(5, est_neighborhood * 6 / 60)  # ~6s per protein
-        sp_min = max(3, est_neighborhood * 3 / 60) if st.session_state.get("run_signalp") else 0
+        sp_min = (
+            max(3, est_neighborhood * 3 / 60)
+            if st.session_state.get("run_signalp")
+            else 0
+        )
         dse_min = 3 if st.session_state.get("run_deepsece") else 0
         # Prediction tools run in parallel — take the max
         prediction_min = max(dlp_min, sp_min, dse_min)
@@ -1300,13 +1449,20 @@ with tab_run:
         per_genome_min = base_min + prediction_min + annotation_min
 
         time_parts = [f"Local steps (MacSyFinder, filtering): ~{base_min} min"]
-        time_parts.append(f"Predictions (DeepLocPro{' + SignalP' if sp_min else ''}{' + DeepSecE' if dse_min else ''}): ~{prediction_min:.0f} min")
+        time_parts.append(
+            f"Predictions (DeepLocPro{' + SignalP' if sp_min else ''}{' + DeepSecE' if dse_min else ''}): ~{prediction_min:.0f} min"
+        )
         if annotation_min > 0:
             ann_tools = []
-            if blastp_min: ann_tools.append(f"BLASTp ~{blastp_min:.0f} min")
-            if hh_min: ann_tools.append(f"HHpred ~{hh_min:.0f} min")
-            if iprs_min: ann_tools.append(f"InterProScan ~{iprs_min:.0f} min")
-            time_parts.append(f"Annotations (parallel: {', '.join(ann_tools)}): ~{annotation_min:.0f} min")
+            if blastp_min:
+                ann_tools.append(f"BLASTp ~{blastp_min:.0f} min")
+            if hh_min:
+                ann_tools.append(f"HHpred ~{hh_min:.0f} min")
+            if iprs_min:
+                ann_tools.append(f"InterProScan ~{iprs_min:.0f} min")
+            time_parts.append(
+                f"Annotations (parallel: {', '.join(ann_tools)}): ~{annotation_min:.0f} min"
+            )
 
         for t in time_parts:
             st.markdown(f"- {t}")
@@ -1336,9 +1492,13 @@ with tab_run:
         if total_min >= 100:
             est_low = f"{total_min / 60:.1f}"
             est_high = f"{total_max / 60:.1f}"
-            st.info(f"**Estimated total: ~{est_low}-{est_high} hours{genome_note}** (rough estimate, depends on API load)")
+            st.info(
+                f"**Estimated total: ~{est_low}-{est_high} hours{genome_note}** (rough estimate, depends on API load)"
+            )
         else:
-            st.info(f"**Estimated total: ~{total_min:.0f}-{total_max:.0f} minutes{genome_note}** (rough estimate, depends on API load)")
+            st.info(
+                f"**Estimated total: ~{total_min:.0f}-{total_max:.0f} minutes{genome_note}** (rough estimate, depends on API load)"
+            )
 
         if n_genomes > 1 and hh_min > 0:
             st.caption(
@@ -1374,7 +1534,9 @@ with tab_run:
                 key="resume_run",
                 help="Steps that completed successfully will be skipped.",
             )
-            st.caption("Previous progress detected. Configure run mode in the Upload & Configure tab for more options.")
+            st.caption(
+                "Previous progress detected. Configure run mode in the Upload & Configure tab for more options."
+            )
         elif "Resume" in run_mode:
             st.info("Resuming from previous run — completed steps will be skipped.")
             st.session_state.resume_run = True
@@ -1382,7 +1544,9 @@ with tab_run:
             st.info("Starting fresh — all steps will rerun.")
             st.session_state.resume_run = False
         elif "Selective" in run_mode:
-            st.info("Selective rerun — only checked steps from the Upload & Configure tab will rerun.")
+            st.info(
+                "Selective rerun — only checked steps from the Upload & Configure tab will rerun."
+            )
             st.session_state.resume_run = True
         else:
             st.session_state.resume_run = False
@@ -1416,6 +1580,7 @@ with tab_run:
             if org_name not in cache:
                 try:
                     from ssign_app.scripts.resolve_taxonomy import resolve_organism
+
                     cache[org_name] = resolve_organism(org_name)
                 except Exception:
                     cache[org_name] = {"species": None, "genus": None}
@@ -1443,7 +1608,7 @@ with tab_run:
             for uf in uploaded_files:
                 dest = os.path.join(tmpdir, uf.name)
                 uf.seek(0)
-                with open(dest, 'wb') as out:
+                with open(dest, "wb") as out:
                     out.write(uf.read())
                 input_paths.append(dest)
                 original_filenames.append(uf.name)
@@ -1455,11 +1620,19 @@ with tab_run:
 
             for file_idx, input_path in enumerate(input_paths):
                 if n_genomes_to_run > 1:
-                    sample_id = st.session_state.get("sample_names", ["sample"])[file_idx] if file_idx < len(st.session_state.get("sample_names", [])) else f"sample_{file_idx+1}"
+                    sample_id = (
+                        st.session_state.get("sample_names", ["sample"])[file_idx]
+                        if file_idx < len(st.session_state.get("sample_names", []))
+                        else f"sample_{file_idx + 1}"
+                    )
                 else:
                     sample_id = st.session_state.get("sample_name", "sample")
 
-                orig_fname = original_filenames[file_idx] if file_idx < len(original_filenames) else ""
+                orig_fname = (
+                    original_filenames[file_idx]
+                    if file_idx < len(original_filenames)
+                    else ""
+                )
                 genome_taxid = _resolve_blastp_taxid(orig_fname)
 
                 config = PipelineConfig(
@@ -1470,15 +1643,21 @@ with tab_run:
                     run_bakta=st.session_state.get("use_bakta", False),
                     bakta_db=st.session_state.get("bakta_db_path", ""),
                     wholeness_threshold=st.session_state.get("wholeness", 0.8),
-                    excluded_systems=st.session_state.get("excluded", ["Flagellum", "Tad", "T3SS"]),
+                    excluded_systems=st.session_state.get(
+                        "excluded", ["Flagellum", "Tad", "T3SS"]
+                    ),
                     conf_threshold=st.session_state.get("conf", 0.8),
                     proximity_window=st.session_state.get("window", 3),
                     required_fraction_correct=st.session_state.get("frac", 0.8),
-                    deeplocpro_mode="local" if "Local" in st.session_state.get("dlp_mode", "") else "remote",
+                    deeplocpro_mode="local"
+                    if "Local" in st.session_state.get("dlp_mode", "")
+                    else "remote",
                     deeplocpro_path=st.session_state.get("dlp_path", ""),
                     skip_deepsece=not st.session_state.get("run_deepsece", False),
                     skip_signalp=not st.session_state.get("run_signalp", False),
-                    signalp_mode="local" if "Local" in st.session_state.get("sp_mode", "") else "remote",
+                    signalp_mode="local"
+                    if "Local" in st.session_state.get("sp_mode", "")
+                    else "remote",
                     signalp_path=st.session_state.get("sp_path", ""),
                     dlp_whole_genome=st.session_state.get("dlp_whole_genome", False),
                     dse_whole_genome=st.session_state.get("dse_whole_genome", False),
@@ -1494,7 +1673,9 @@ with tab_run:
                     hhsuite_mode="remote",
                     hhsuite_pfam_db="",
                     hhsuite_pdb70_db="",
-                    hhpred_min_probability=float(st.session_state.get("hhpred_min_prob", 40)),
+                    hhpred_min_probability=float(
+                        st.session_state.get("hhpred_min_prob", 40)
+                    ),
                     skip_interproscan=not st.session_state.get("run_iprs", True),
                     interproscan_mode="remote",
                     interproscan_db="",
@@ -1506,21 +1687,29 @@ with tab_run:
                     fig_category=st.session_state.get("fig_category", True),
                     fig_ss_comp=st.session_state.get("fig_ss_comp", True),
                     fig_tool_heatmap=st.session_state.get("fig_tool_heatmap", True),
-                    fig_substrate_count=st.session_state.get("fig_substrate_count", True),
+                    fig_substrate_count=st.session_state.get(
+                        "fig_substrate_count", True
+                    ),
                     fig_func_summary=st.session_state.get("fig_func_summary", True),
-                    interproscan_evalue=float(st.session_state.get("iprs_evalue", 1e-5)),
+                    interproscan_evalue=float(
+                        st.session_state.get("iprs_evalue", 1e-5)
+                    ),
                     foldseek_evalue=float(st.session_state.get("fs_evalue", 1e-3)),
                     foldseek_min_tmscore=float(st.session_state.get("fs_tmscore", 0.5)),
                     deepsece_min_prob=float(st.session_state.get("dse_min_prob", 0.8)),
                     signalp_min_prob=float(st.session_state.get("sp_min_prob", 0.5)),
-                    ortholog_min_pident=float(st.session_state.get("og_min_pident", 40)),
+                    ortholog_min_pident=float(
+                        st.session_state.get("og_min_pident", 40)
+                    ),
                     ortholog_min_qcov=float(st.session_state.get("og_min_qcov", 70)),
                 )
                 genome_configs.append(config)
 
                 # Create per-genome progress UI
                 if n_genomes_to_run > 1:
-                    st.markdown(f"**Genome {file_idx+1}/{n_genomes_to_run}: {sample_id}**")
+                    st.markdown(
+                        f"**Genome {file_idx + 1}/{n_genomes_to_run}: {sample_id}**"
+                    )
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 genome_progress.append((progress_bar, status_text))
@@ -1533,9 +1722,14 @@ with tab_run:
             resume = st.session_state.get("resume_run", False)
 
             if n_genomes_to_run > 1:
-                import threading, time as _time, re as _re
+                import threading
+                import time as _time
+                import re as _re
                 from concurrent.futures import ThreadPoolExecutor, as_completed
-                from streamlit.runtime.scriptrunner import get_script_run_ctx, add_script_run_ctx
+                from streamlit.runtime.scriptrunner import (
+                    get_script_run_ctx,
+                    add_script_run_ctx,
+                )
 
                 _ctx = get_script_run_ctx()
                 _start_time = _time.monotonic()
@@ -1545,23 +1739,27 @@ with tab_run:
                 _genome_counts = {}  # {idx: {'neighborhood': N, 'secreted': N, 'done': bool}}
 
                 # Per-protein timing constants (measured)
-                _SEC_PER_NEIGH_DLP = 6    # DeepLocPro: ~6s per neighborhood protein
-                _SEC_PER_SEC_HH = 260     # HHpred: ~260s per secreted protein
-                _SEC_PER_SEC_BLAST = 30   # BLASTp: ~30s per secreted protein
-                _SEC_PER_SEC_IPRS = 15    # InterProScan: ~15s per secreted protein
+                _SEC_PER_NEIGH_DLP = 6  # DeepLocPro: ~6s per neighborhood protein
+                _SEC_PER_SEC_HH = 260  # HHpred: ~260s per secreted protein
+                _SEC_PER_SEC_BLAST = 30  # BLASTp: ~30s per secreted protein
+                _SEC_PER_SEC_IPRS = 15  # InterProScan: ~15s per secreted protein
 
                 def _update_estimate():
                     """Recalculate and display time estimate based on discovered protein counts."""
                     with _counts_lock:
-                        counted = [c for c in _genome_counts.values() if c.get('secreted') is not None]
-                        done = sum(1 for c in _genome_counts.values() if c.get('done'))
+                        counted = [
+                            c
+                            for c in _genome_counts.values()
+                            if c.get("secreted") is not None
+                        ]
+                        done = sum(1 for c in _genome_counts.values() if c.get("done"))
                         remaining = n_genomes_to_run - done
 
                     if not counted or remaining == 0:
                         return
 
                     # Average from discovered genomes
-                    avg_sec = sum(c['secreted'] for c in counted) / len(counted)
+                    avg_sec = sum(c["secreted"] for c in counted) / len(counted)
                     total_sec_remaining = avg_sec * remaining
 
                     # HHpred is sequential (sem=1), others are parallel
@@ -1574,15 +1772,19 @@ with tab_run:
                     blastp_enabled = st.session_state.get("run_blastp", False)
                     iprs_enabled = st.session_state.get("run_iprs", False)
                     other_ann_min = max(
-                        total_sec_remaining * _SEC_PER_SEC_BLAST / 60 / 5 if blastp_enabled else 0,
-                        total_sec_remaining * _SEC_PER_SEC_IPRS / 60 / 5 if iprs_enabled else 0,
+                        total_sec_remaining * _SEC_PER_SEC_BLAST / 60 / 5
+                        if blastp_enabled
+                        else 0,
+                        total_sec_remaining * _SEC_PER_SEC_IPRS / 60 / 5
+                        if iprs_enabled
+                        else 0,
                     )
 
                     elapsed = (_time.monotonic() - _start_time) / 60
                     est_remaining = max(0, hh_remaining_min + other_ann_min)
 
                     if est_remaining >= 60:
-                        est_str = f"~{est_remaining/60:.1f} hours"
+                        est_str = f"~{est_remaining / 60:.1f} hours"
                     else:
                         est_str = f"~{est_remaining:.0f} minutes"
 
@@ -1594,10 +1796,10 @@ with tab_run:
                     )
 
                 _api_sem = {
-                    'dtu': threading.Semaphore(5),
-                    'ncbi': threading.Semaphore(5),
-                    'mpi': threading.Semaphore(1),
-                    'ebi': threading.Semaphore(5),
+                    "dtu": threading.Semaphore(5),
+                    "ncbi": threading.Semaphore(5),
+                    "mpi": threading.Semaphore(1),
+                    "ebi": threading.Semaphore(5),
                 }
 
                 def _run_one_genome(idx):
@@ -1611,25 +1813,30 @@ with tab_run:
 
                         # Parse protein counts from step messages
                         try:
-                            m = _re.search(r'(\d+)\s+neighborhood proteins', msg)
+                            m = _re.search(r"(\d+)\s+neighborhood proteins", msg)
                             if m:
                                 with _counts_lock:
-                                    _genome_counts.setdefault(idx, {})['neighborhood'] = int(m.group(1))
+                                    _genome_counts.setdefault(idx, {})[
+                                        "neighborhood"
+                                    ] = int(m.group(1))
 
-                            m = _re.search(r'(\d+)\s+secreted proteins', msg)
+                            m = _re.search(r"(\d+)\s+secreted proteins", msg)
                             if m:
                                 with _counts_lock:
-                                    _genome_counts.setdefault(idx, {})['secreted'] = int(m.group(1))
+                                    _genome_counts.setdefault(idx, {})["secreted"] = (
+                                        int(m.group(1))
+                                    )
                                 _update_estimate()
                         except Exception:
                             pass
 
-                    runner = PipelineRunner(cfg, progress_callback=_update,
-                                            api_semaphores=_api_sem)
+                    runner = PipelineRunner(
+                        cfg, progress_callback=_update, api_semaphores=_api_sem
+                    )
                     result = runner.run(resume=resume)
 
                     with _counts_lock:
-                        _genome_counts.setdefault(idx, {})['done'] = True
+                        _genome_counts.setdefault(idx, {})["done"] = True
                     _update_estimate()
 
                     return result
@@ -1647,12 +1854,12 @@ with tab_run:
                         except Exception as e:
                             bar, status = genome_progress[idx]
                             status.markdown(f":red[**Error**] \u2014 {e}")
-                            all_results.append(
-                                StepResult("pipeline", False, str(e))
-                            )
+                            all_results.append(StepResult("pipeline", False, str(e)))
             else:
                 # Single genome — run directly
-                import time as _time, re as _re
+                import time as _time
+                import re as _re
+
                 _start_time = _time.monotonic()
                 bar, status = genome_progress[0]
 
@@ -1661,15 +1868,31 @@ with tab_run:
                     status.markdown(f"**{step}** \u2014 {msg}")
                     # Update estimate when protein counts are discovered
                     try:
-                        m = _re.search(r'(\d+)\s+secreted proteins', msg)
+                        m = _re.search(r"(\d+)\s+secreted proteins", msg)
                         if m:
                             n_sec = int(m.group(1))
                             elapsed = (_time.monotonic() - _start_time) / 60
-                            hh_min = n_sec * 260 / 60 if st.session_state.get("run_hh") else 0
-                            blast_min = n_sec * 30 / 60 if st.session_state.get("run_blastp") else 0
-                            iprs_min = n_sec * 15 / 60 if st.session_state.get("run_iprs") else 0
+                            hh_min = (
+                                n_sec * 260 / 60
+                                if st.session_state.get("run_hh")
+                                else 0
+                            )
+                            blast_min = (
+                                n_sec * 30 / 60
+                                if st.session_state.get("run_blastp")
+                                else 0
+                            )
+                            iprs_min = (
+                                n_sec * 15 / 60
+                                if st.session_state.get("run_iprs")
+                                else 0
+                            )
                             ann_min = max(hh_min, blast_min, iprs_min)
-                            est_str = f"~{ann_min:.0f} min" if ann_min < 60 else f"~{ann_min/60:.1f} hr"
+                            est_str = (
+                                f"~{ann_min:.0f} min"
+                                if ann_min < 60
+                                else f"~{ann_min / 60:.1f} hr"
+                            )
                             estimate_box.info(
                                 f"**{n_sec} secreted proteins found** | "
                                 f"Elapsed: {elapsed:.0f} min | "
@@ -1678,8 +1901,10 @@ with tab_run:
                     except Exception:
                         pass
 
-                runner = PipelineRunner(genome_configs[0], progress_callback=_update_single)
-                with st.spinner(f"Running ssign pipeline..."):
+                runner = PipelineRunner(
+                    genome_configs[0], progress_callback=_update_single
+                )
+                with st.spinner("Running ssign pipeline..."):
                     results = runner.run(resume=resume)
                 all_results.extend(results)
 
@@ -1698,9 +1923,13 @@ with tab_run:
             n_genomes_run = len(input_paths)
 
             if n_success == n_total:
-                st.success(f"Pipeline completed successfully for {n_genomes_run} genome(s)! ({n_success}/{n_total} steps)")
+                st.success(
+                    f"Pipeline completed successfully for {n_genomes_run} genome(s)! ({n_success}/{n_total} steps)"
+                )
             else:
-                st.warning(f"Pipeline finished with issues for {n_genomes_run} genome(s) ({n_success}/{n_total} steps succeeded)")
+                st.warning(
+                    f"Pipeline finished with issues for {n_genomes_run} genome(s) ({n_success}/{n_total} steps succeeded)"
+                )
 
         # Show progress if running
         if st.session_state.running:
@@ -1735,14 +1964,20 @@ with tab_run:
                             in_proteins = False
                             count = 0
                             for line in lines:
-                                if '# Secreted Proteins' in line:
+                                if "# Secreted Proteins" in line:
                                     in_proteins = True
                                     continue
-                                if line.startswith('#') or (not line.strip() and in_proteins):
+                                if line.startswith("#") or (
+                                    not line.strip() and in_proteins
+                                ):
                                     if in_proteins:
                                         break
                                     continue
-                                if in_proteins and line.strip() and not line.startswith('locus_tag'):
+                                if (
+                                    in_proteins
+                                    and line.strip()
+                                    and not line.startswith("locus_tag")
+                                ):
                                     count += 1
                             n_secreted = str(count) if count > 0 else "\u2014"
                         except Exception:
@@ -1764,12 +1999,14 @@ with tab_run:
                 st.info(f"All output files are saved to: `{output_dir}`")
 
                 # ZIP download
-                import zipfile, io
+                import zipfile
+                import io
+
                 zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
                     for fname in sorted(os.listdir(output_dir)):
                         fpath = os.path.join(output_dir, fname)
-                        if os.path.isfile(fpath) and not fname.startswith('.'):
+                        if os.path.isfile(fpath) and not fname.startswith("."):
                             zf.write(fpath, fname)
                     fig_dir = os.path.join(output_dir, "figures")
                     if os.path.isdir(fig_dir):
@@ -1792,8 +2029,8 @@ with tab_run:
                 st.markdown("**Individual files:**")
                 for fname in sorted(os.listdir(output_dir)):
                     fpath = os.path.join(output_dir, fname)
-                    if os.path.isfile(fpath) and not fname.startswith('.'):
-                        with open(fpath, 'rb') as f:
+                    if os.path.isfile(fpath) and not fname.startswith("."):
+                        with open(fpath, "rb") as f:
                             st.download_button(
                                 f"\U0001f4e5 {fname}",
                                 f.read(),
@@ -1801,4 +2038,6 @@ with tab_run:
                                 key=f"dl_{fname}",
                             )
         else:
-            st.info("No results yet. Configure your pipeline in the **Pipeline Overview** tab and click **Run ssign** above.")
+            st.info(
+                "No results yet. Configure your pipeline in the **Pipeline Overview** tab and click **Run ssign** above."
+            )
