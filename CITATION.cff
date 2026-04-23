@@ -1,0 +1,61 @@
+cff-version: 1.2.0
+message: "If you use ssign in your research, please cite it as below."
+type: software
+title: "ssign: Secretion-system Identification for Gram-Negative Bacteria"
+abstract: >-
+  ssign is a bioinformatics pipeline that identifies secretion-system substrates
+  in Gram-negative bacterial genomes. It combines secretion-system detection
+  (MacSyFinder v2 + TXSScan), secreted-protein prediction (DeepLocPro, DeepSecE,
+  PLM-Effector, SignalP), per-component genomic proximity analysis, and multi-tool
+  functional annotation (BLASTp, HH-suite, InterProScan, Bakta, EggNOG, pLM-BLAST,
+  ProtParam) to generate a ranked, evidence-linked list of candidate substrates
+  together with a publication-ready report.
+authors:
+  - given-names: "M. Teo"
+    family-names: "Reid"
+    email: "teoreid@gmail.com"
+    affiliation: "Department of Bioengineering, Imperial College London"
+    orcid: "https://orcid.org/0009-0009-9239-5743"
+  - given-names: "Owen"
+    family-names: "Terpstra"
+    email: "owen.terpstra@rug.nl"
+    affiliation: >-
+      Molecular Microbiology, Faculty of Science and Engineering,
+      University of Groningen
+    orcid: "https://orcid.org/0000-0002-8767-4061"
+  - given-names: "Karan"
+    family-names: "Kumar"
+    email: "karan.kumar@rwth-aachen.de"
+    affiliation: >-
+      Industrial Systems Biotechnology Research Group, Institute of Applied
+      Microbiology (iAMB), RWTH Aachen University
+    orcid: "https://orcid.org/0000-0003-0012-8314"
+  - given-names: "Sonja"
+    family-names: "Billerbeck"
+    email: "s.billerbeck@imperial.ac.uk"
+    affiliation: "Department of Bioengineering, Imperial College London"
+    orcid: "https://orcid.org/0000-0002-3092-578X"
+contact:
+  - given-names: "Sonja"
+    family-names: "Billerbeck"
+    email: "s.billerbeck@imperial.ac.uk"
+    affiliation: "Department of Bioengineering, Imperial College London"
+    orcid: "https://orcid.org/0000-0002-3092-578X"
+version: "0.9.0-prerefactor"
+date-released: "2026-04-22"
+repository-code: "https://github.com/reidmat/ssign"
+url: "https://github.com/reidmat/ssign"
+license: "GPL-3.0-or-later"
+keywords:
+  - "bioinformatics"
+  - "secretion systems"
+  - "Gram-negative bacteria"
+  - "substrate prediction"
+  - "protein localization"
+  - "MacSyFinder"
+  - "TXSScan"
+  - "DeepLocPro"
+  - "DeepSecE"
+  - "PLM-Effector"
+  - "SignalP"
+  - "bacterial genomics"

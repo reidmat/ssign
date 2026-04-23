@@ -1,304 +1,270 @@
-# ssign — Secretion-System Identification for Gram Negatives
+# ssign — Secretion-system Identification for Gram-Negative Bacteria
 
-**ssign** links established bioinformatic tools into a single pipeline that identifies secretion systems and their associated secreted proteins in gram-negative bacterial genomes. Given one or more genome files, ssign detects which secretion systems are present, predicts which proteins are secreted through them, and optionally annotates those proteins with functional and structural information.
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Status: Beta](https://img.shields.io/badge/status-beta-orange)](#roadmap-to-v100)
 
-Built for the [Billerbeck Lab](https://www.billerbecklab.com/) at Imperial College London. Version 0.1.0 (Beta).
+ssign detects secretion systems in Gram-negative bacterial genomes, identifies
+the proteins they secrete, and annotates those proteins with functional and
+structural information from the major bioinformatics databases. Built for the
+[Billerbeck Lab](https://www.billerbecklab.com/) at Imperial College London.
 
----
-
-## Installation
-
-ssign is a Python package with a browser-based GUI. Installation takes a few minutes and requires no bioinformatics experience.
-
-### Linux (Ubuntu / Debian)
-
-1. **Open a terminal.** Search for "Terminal" in your app launcher, or press `Ctrl+Alt+T`.
-
-2. **Install Python** (if not already installed). Most Linux distributions include Python, but you may need pip and venv:
-
-   ```bash
-   sudo apt install python3 python3-pip python3-venv
-   ```
-
-3. **Create a virtual environment.** This creates an isolated Python environment so ssign's dependencies don't conflict with other software on your system:
-
-   ```bash
-   python3 -m venv ~/.ssign-env && source ~/.ssign-env/bin/activate
-   ```
-
-4. **Install ssign:**
-
-   ```bash
-   pip install ssign
-   ```
-
-5. **Launch ssign:**
-
-   ```bash
-   ssign
-   ```
-
-   This opens a browser-based interface where you upload genome files and configure the pipeline.
-
-> **Tip:** Each time you open a new terminal, reactivate the environment before running ssign:
-> ```bash
-> source ~/.ssign-env/bin/activate && ssign
-> ```
-
-### macOS
-
-1. **Open Terminal.** Search for "Terminal" in Spotlight (`Cmd+Space`), or find it in Applications > Utilities.
-
-2. **Install Python** (if not already installed). The recommended way is via [Homebrew](https://brew.sh/):
-
-   ```bash
-   brew install python
-   ```
-
-3. **Create a virtual environment.** This creates an isolated Python environment so ssign's dependencies don't conflict with other software on your system:
-
-   ```bash
-   python3 -m venv ~/.ssign-env && source ~/.ssign-env/bin/activate
-   ```
-
-4. **Install ssign:**
-
-   ```bash
-   pip install ssign
-   ```
-
-5. **Launch ssign:**
-
-   ```bash
-   ssign
-   ```
-
-   This opens a browser-based interface where you upload genome files and configure the pipeline.
-
-> **Tip:** Each time you open a new terminal, reactivate the environment before running ssign:
-> ```bash
-> source ~/.ssign-env/bin/activate && ssign
-> ```
-
-### Windows (via WSL)
-
-ssign requires the Windows Subsystem for Linux (WSL), which provides a full Linux environment inside Windows.
-
-1. **Open PowerShell as Administrator.** Right-click the Start button and select "Terminal (Admin)" or "PowerShell (Admin)".
-
-2. **Install WSL:**
-
-   ```powershell
-   wsl --install
-   ```
-
-   This installs Ubuntu by default. The download is approximately 1-2 GB.
-
-3. **Restart your computer** when prompted.
-
-4. **Open the Ubuntu app** from the Start menu. On first launch, it will ask you to create a Linux username and password.
-
-5. **Follow the Linux instructions above** (starting from step 2) inside the Ubuntu terminal.
+**Version `0.9.0` — pre-publication baseline.** The next release (`1.0.0`)
+will be the publication version: fully offline-capable, SHA-pinned Docker
+image, Zenodo-DOI'd. See [Roadmap to v1.0.0](#roadmap-to-v100).
 
 ---
 
-## Optional Dependencies
+## 🌐 Hosted web service — coming soon
 
-ssign works out of the box with `pip install ssign`. The following optional tools extend its capabilities.
+A public web service that lets you submit a genome in the browser and receive
+the full ssign report without installing anything locally is **planned for
+release alongside the v1.0.0 paper**. If you don't have the hardware or CLI
+experience to run ssign yourself, that will be the easiest entry point. This
+section will be updated with the URL once the service is live.
 
-### DeepSecE — additional secreted protein prediction
-
-DeepSecE is a deep learning model that predicts secretion system effectors. It provides an additional layer of evidence alongside DeepLocPro and SignalP. The download is approximately 7.3 GB (ESM protein language model).
-
-```bash
-pip install ssign[deepsece]
-```
-
-Same command on all platforms. Install inside your ssign virtual environment.
-
-### Bakta — higher-quality ORF prediction
-
-If your input is raw FASTA contigs (not GenBank), ssign uses Pyrodigal for gene prediction by default. Bakta provides more comprehensive annotation. After installing the Python package, you also need to download its database (~2 GB).
-
-```bash
-pip install ssign[bakta]
-bakta_db download --output ~/bakta_db --type light
-```
-
-Same command on all platforms. Install inside your ssign virtual environment.
-
-### BLAST+ — ortholog grouping across genomes
-
-When analysing multiple genomes, BLAST+ enables ortholog grouping to identify shared secreted proteins. BLAST+ is not pip-installable and must be installed through your system package manager (~200 MB).
-
-**Linux (Ubuntu / Debian):**
-```bash
-sudo apt install ncbi-blast+
-```
-
-**macOS:**
-```bash
-brew install blast
-```
-
-**Conda (cross-platform):**
-```bash
-conda install -c bioconda blast
-```
-
-### pLM-BLAST — protein language model structural search
-
-pLM-BLAST enables sequence-structure similarity searches using protein language model embeddings. It is not pip-installable and requires local setup. See the [pLM-BLAST GitHub repository](https://github.com/labstructbioinf/pLM-BLAST) for installation instructions.
-
-> **Note:** pLM-BLAST and Foldseek are **ssign-power only** features. They require local databases and/or 3D structure files and are not available through the cloud-based ssign GUI.
-
-### Install all pip-installable optional dependencies
-
-```bash
-pip install ssign[full]
-```
-
-Or combine specific extras: `pip install ssign[deepsece,bakta]`
+In the meantime, you can run ssign locally (below) or via Google Colab (see
+[`colab/`](colab/), notebook shipping with v1.0.0).
 
 ---
 
-## Pipeline Overview
+## Quickstart
 
-ssign runs in four stages:
+```bash
+# Create an isolated environment
+python3 -m venv .venv && source .venv/bin/activate
 
-### Stage 1 — Secretion System Identification
+# Install (from PyPI once v1.0.0 ships; currently from source)
+pip install git+https://github.com/reidmat/ssign.git@v0.9.0-prerefactor
 
-Detects secretion systems (T1SS, T2SS, T3SS, T4SS, T5SS, T6SS, T9SS, etc.) using **MacSyFinder v2** with the **TXSScan** models. Only systems meeting a completeness threshold (default 80%) are retained. Flagellum, Tad, and T3SS are excluded by default (configurable).
+# Launch the GUI
+ssign
+```
 
-### Stage 2 — Secreted Protein Identification
+Opens a browser-based interface for uploading genomes and configuring the
+pipeline. Command-line mode is also supported (see `ssign --help`).
 
-Predicts which proteins are secreted through the detected systems using a combination of:
+**System requirements:** Linux or macOS, Python ≥ 3.10. CUDA-capable GPU
+recommended for DeepSecE and (in v1.0.0) PLM-Effector.
 
-- **DeepLocPro** — deep learning subcellular localisation predictor for prokaryotes (required)
-- **DeepSecE** — secretion system effector predictor (optional, ~7.3 GB model)
-- **SignalP 6.0** — signal peptide predictor (optional)
-
-Secreted proteins are identified through guilt-by-association: proteins encoded near secretion system components that are predicted to be extracellular are flagged as candidate secreted proteins. Cross-validation between tools reduces false positives.
-
-### Stage 3 — Secreted Protein Annotation (Optional)
-
-Each detected secreted protein can be annotated using any combination of five tools:
-
-| Tool | What it provides | API provider |
-|------|-----------------|--------------|
-| **BLASTp** | Sequence homology hits | NCBI |
-| **HHpred** | Remote homology / domain detection | MPI Bioinformatics Toolkit |
-| **InterProScan** | Domain and family annotations | EBI |
-| **Foldseek** | Structural similarity search | ssign-power only |
-| **ProtParam** | Physicochemical properties | Local (Biopython) |
-
-Each tool can be independently enabled or disabled in the GUI.
-
-> **Note on well-annotated genomes:** If your genome already has thorough functional annotations, you can skip the optional annotation tools to save significant time. The existing annotations from your input file are already included in the results. You can always re-run with annotation tools enabled later using the Resume feature.
-
-### Stage 4 — Generate Data and Figures
-
-Merges all results into output tables and generates publication-ready summary figures.
+**Full install instructions** — including WSL on Windows, optional tool
+extras (Bakta, DeepSecE, BLAST+), and dependency management — are in
+[`docs/optional_tools.md`](docs/optional_tools.md). Will be restructured into
+`docs/how-to/install.md` at v1.0.0.
 
 ---
 
-## Supported Input Formats
+## What ssign does
 
-| Format | Extensions | Notes |
-|--------|-----------|-------|
-| **GenBank** (recommended) | `.gbff`, `.gbk`, `.gb` | Includes gene annotations — no ORF prediction needed |
-| **FASTA contigs** | `.fasta`, `.fna`, `.fa` | Gene prediction via Pyrodigal (automatic) or Bakta (optional) |
-| **Protein FASTA** | `.faa` | Pre-translated proteins — read directly |
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Stage 1: Secretion-System Detection                                    │
+│    MacSyFinder v2 + TXSScan models → validated secretion systems        │
+│                                                                         │
+│  Stage 2: Secreted-Protein Prediction                                   │
+│    DeepLocPro + DeepSecE + SignalP (+ PLM-Effector in v1.0.0)          │
+│    → candidate proteins + guilt-by-association with SS component        │
+│       neighborhoods                                                     │
+│                                                                         │
+│  Stage 3: Cross-Validation + Proximity Analysis                         │
+│    Per-SS-component ±3-gene window, same contig only                    │
+│    → ranked list of candidate secreted proteins                         │
+│                                                                         │
+│  Stage 4: Optional Functional Annotation                                │
+│    BLASTp, HH-suite, InterProScan, Bakta, EggNOG, pLM-BLAST, ProtParam  │
+│    → integrated annotations + consensus voting across tools             │
+│                                                                         │
+│  Stage 5: Integration + Reporting                                       │
+│    → HTML report, result tables, publication-ready figures              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-GenBank format is recommended because it contains both the nucleotide sequence and gene annotations, allowing ssign to skip the ORF prediction step entirely.
+Detailed description of each stage, threshold choices, and tool selection
+rationale lives in [`docs/`](docs/) (will be restructured per Diataxis at
+v1.0.0).
 
-> **Note:** GFF3/GTF files (`.gff`, `.gff3`, `.gtf`) are not supported in the ssign GUI because they require a companion FASTA file that the browser-based uploader cannot pair. If you need GFF3 input, use **ssign-power** (Nextflow), which handles file pairing automatically. Alternatively, convert your GFF3 + FASTA to GenBank format using a tool like [Biopython](https://biopython.org/) or download the GenBank version from NCBI.
+---
+
+## Supported inputs
+
+| Format                      | Extensions              | Notes                                              |
+| --------------------------- | ----------------------- | -------------------------------------------------- |
+| **GenBank** _(recommended)_ | `.gbff`, `.gbk`, `.gb`  | Ships with gene annotations — skips ORF prediction |
+| FASTA contigs               | `.fasta`, `.fna`, `.fa` | Gene prediction via Pyrodigal (default) or Bakta   |
+| Protein FASTA               | `.faa`                  | Pre-translated proteins — used directly            |
+
+GFF3/GTF pairs are supported via the CLI only (not the browser uploader) —
+they require a companion FASTA that the browser cannot pair safely.
 
 ---
 
 ## Output
 
-ssign produces the following output files:
-
-| File | Description |
-|------|-------------|
-| `ssign_results.csv` | Main results table, chunked into three sections: (1) secreted proteins with annotations, (2) secretion systems with their associated proteins, (3) other detected secretion systems |
-| `ssign_results_raw.csv` | Complete unfiltered results for all proteins |
-| `ssign_summary.txt` | Plain-text summary of detected systems and secreted proteins |
-| `figures/` | Publication-ready figures (system diagrams, annotation summaries) |
-
----
-
-## Important: API Fragility
-
-Most annotation and prediction tools in ssign run via free cloud APIs provided by DTU, NCBI, MPI Bioinformatics Toolkit, and EBI. While this means no local database setup is needed, there are trade-offs:
-
-- **Speed**: A full run with all annotation tools typically takes **1-3 hours** depending on genome size, number of secreted proteins, and server load.
-- **Rate limits**: APIs enforce request limits (e.g., NCBI allows 3 requests/second, MPI Toolkit allows 200/hour). ssign respects these limits automatically.
-- **Reliability**: Cloud services occasionally experience downtime. ssign includes retry logic with exponential backoff, but extended outages may require reruns.
-- **Reproducibility**: API databases are updated periodically, so results may vary slightly between runs months apart.
-
-If speed and reliability are critical, consider **ssign-power** (see below).
+- `ssign_results.csv` — main results, three sections: (1) secreted proteins
+  with annotations, (2) secretion systems with associated proteins, (3)
+  other systems detected but without high-confidence substrates.
+- `ssign_results_raw.csv` — complete unfiltered per-protein results.
+- `ssign_summary.txt` — plain-text summary.
+- `figures/` — publication-ready figures (system diagrams, annotation
+  heatmaps, enrichment plots).
+- HTML report with embedded interactive tables.
 
 ---
 
-## ssign-power
+## Key parameters
 
-For local or HPC execution with full local databases (no API dependency), install **ssign-power**. This uses Nextflow DSL2 with Docker or Singularity containers and runs all tools locally, including Foldseek and pLM-BLAST which are not available in the standard ssign GUI.
+| Parameter             | Default                | Meaning                                                                     |
+| --------------------- | ---------------------- | --------------------------------------------------------------------------- |
+| `excluded_systems`    | `Flagellum, Tad, T3SS` | System types to skip (T3SS excluded by default — DeepSecE unreliable on it) |
+| `conf_threshold`      | `0.8`                  | DeepLocPro minimum extracellular probability                                |
+| `proximity_window`    | `3`                    | +/- N genes around each SS component (same contig only)                     |
+| `wholeness_threshold` | `0.8`                  | Minimum MacSyFinder completeness to accept a system                         |
+
+All configurable in the GUI or via CLI flags. Full parameter reference in
+[`docs/configuration.md`](docs/configuration.md).
+
+---
+
+## Optional dependencies
+
+ssign's core pipeline runs with just `pip install ssign`. Extras enable
+additional tools:
+
+| Extra      | What it enables                                | Install                                          |
+| ---------- | ---------------------------------------------- | ------------------------------------------------ |
+| `deepsece` | DeepSecE effector prediction (~7 GB ESM model) | `pip install ssign[deepsece]`                    |
+| `bakta`    | Bakta gene annotation (~2 GB light DB)         | `pip install ssign[bakta]` + `bakta_db download` |
+| `full`     | All of the above + ortholog analysis           | `pip install ssign[full]`                        |
+| `dev`      | Test + lint dependencies                       | `pip install ssign[dev]`                         |
+
+BLAST+ is a system binary, not pip-installable:
 
 ```bash
-nextflow run ssign --input genome.gbff --outdir results -profile docker
+# Debian/Ubuntu
+sudo apt install ncbi-blast+
+# macOS
+brew install blast
+# Conda
+conda install -c bioconda blast
 ```
 
-ssign-power requires Nextflow, Java 11+, and Docker or Singularity. It is not needed for normal use — the standard `pip install ssign` workflow covers most use cases.
+---
+
+## Power mode (Nextflow)
+
+For HPC batch runs with local databases and all tools containerised, ssign
+also ships as a **Nextflow DSL2 pipeline**. Fully reproducible across
+Docker / Singularity / Apptainer.
+
+```bash
+nextflow run main.nf --input genome.gbff --outdir results -profile docker
+```
+
+Requires Nextflow ≥ 22.10, Java 11+, and Docker or Singularity. Power mode
+status beyond v1.0.0 is under review; see the plan file in project memory.
 
 ---
 
-## Key Parameters
+## Roadmap to v1.0.0
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Excluded systems | `Flagellum, Tad, T3SS` | Secretion system types to exclude from analysis |
-| Confidence threshold | `0.8` | Minimum DeepLocPro extracellular probability |
-| Proximity window | `3` | Number of genes (+/-) around each SS component to search |
-| System completeness | `0.8` | Minimum MacSyFinder wholeness score to accept a system |
+v1.0.0 is the publication release and will include:
 
-All parameters are configurable through the GUI settings panel.
+- **Fully offline operation** — no external API dependencies. All tools run
+  from local binaries and databases. The current baseline still uses BioLib
+  (DeepLocPro, SignalP), NCBI remote BLAST, EBI InterProScan, and the MPI
+  Toolkit HHpred web service — all replaced or made local for v1.0.0.
+- **New tools** — Bakta + EggNOG (whole-genome), PLM-Effector (first-class
+  prediction), pLM-BLAST / ECOD70 (substrate annotation).
+- **Docker bundle image** — SHA-pinned, reproducible for 5+ years, published
+  to Docker Hub / GHCR.
+- **Zenodo deposits** — separate DOIs for source code, model weights, and
+  database bundle. Paper cites all three.
+- **FAIR-compliant repository layout** — per the
+  [FAIR4RS principles](https://doi.org/10.1038/s41597-022-01710-x) (Barker
+  et al. 2022, _Scientific Data_).
+- **Public hosted web service** (post-publication) — Flask-based, BLAST-style
+  submission form, job queue, results page.
+
+Track progress in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-## Citations
+## Citing ssign
 
-If you use ssign in your research, please cite the underlying tools:
+If you use ssign in your research, please cite the software itself in
+addition to the underlying tools. At v1.0.0 we will have a Zenodo DOI +
+published paper DOI; for the pre-publication baseline, cite via
+[`CITATION.cff`](CITATION.cff) or the GitHub tag `v0.9.0-prerefactor`.
 
-- **MacSyFinder v2**: Neron B, Denise R, Coluzzi C, Touchon M, Rocha EPC, Abby SS. MacSyFinder v2: Improved modelling and search engine to identify molecular systems in genomes. *Peer Community Journal*. 2023;3:e28. [doi:10.24072/pcjournal.250](https://doi.org/10.24072/pcjournal.250)
+The [forthcoming paper]:
 
-- **TXSScan**: Abby SS, Cury J, Guglielmini J, Neron B, Touchon M, Rocha EPC. Identification of protein secretion systems in bacterial genomes. *Scientific Reports*. 2016;6:23080. [doi:10.1038/srep23080](https://doi.org/10.1038/srep23080)
+> Reid, M. T., Terpstra, O., Kumar, K., & Billerbeck, S. ssign: an integrated
+> pipeline for secretion-system and secreted-protein identification in
+> Gram-negative bacterial genomes. _In preparation_, 2026.
 
-- **DeepLocPro**: Moreno J, Nielsen H, Winther O, Teufel F. Predicting the subcellular location of prokaryotic proteins with DeepLocPro. *Bioinformatics*. 2024;40(12):btae677. [doi:10.1093/bioinformatics/btae677](https://doi.org/10.1093/bioinformatics/btae677)
+---
 
-- **DeepSecE**: Zhang Y, Guan J, Li C, Wang Z, Deng Z, Gasser RB, Song J, Ou HY. DeepSecE: a deep-learning-based framework for multiclass prediction of secreted proteins in gram-negative bacteria. *Research*. 2023;6:0258. [doi:10.34133/research.0258](https://doi.org/10.34133/research.0258)
+## Citing the underlying tools
 
-- **SignalP 6.0**: Teufel F, Almagro Armenteros JJ, Johansen AR, Gislason MH, Piber SI, Tsirigos KD, Winther O, Brunak S, von Heijne G, Nielsen H. SignalP 6.0 predicts all five types of signal peptides using protein language models. *Nature Biotechnology*. 2022;40(7):1023-1025. [doi:10.1038/s41587-021-01156-3](https://doi.org/10.1038/s41587-021-01156-3)
+ssign integrates many excellent open-source tools. If your analysis uses a
+given tool, please cite it alongside ssign.
 
-- **BLAST+**: Camacho C, Coulouris G, Avagyan V, Ma N, Papadopoulos J, Bealer K, Madden TL. BLAST+: architecture and applications. *BMC Bioinformatics*. 2009;10:421. [doi:10.1186/1471-2105-10-421](https://doi.org/10.1186/1471-2105-10-421)
+<details>
+<summary>Full list (click to expand)</summary>
 
-- **HH-suite3**: Steinegger M, Meier M, Mirdita M, Vohringer H, Haunsberger SJ, Soding J. HH-suite3 for fast remote homology detection and deep protein annotation. *BMC Bioinformatics*. 2019;20:473. [doi:10.1186/s12859-019-3019-7](https://doi.org/10.1186/s12859-019-3019-7)
+- **MacSyFinder v2**: Neron B, Denise R, Coluzzi C, Touchon M, Rocha EPC,
+  Abby SS. _Peer Community Journal_. 2023;3:e28. [doi:10.24072/pcjournal.250](https://doi.org/10.24072/pcjournal.250)
+- **TXSScan**: Abby SS, Cury J, Guglielmini J, Neron B, Touchon M, Rocha EPC.
+  _Scientific Reports_. 2016;6:23080. [doi:10.1038/srep23080](https://doi.org/10.1038/srep23080)
+- **DeepLocPro**: Moreno J, Nielsen H, Winther O, Teufel F. _Bioinformatics_.
+  2024;40(12):btae677. [doi:10.1093/bioinformatics/btae677](https://doi.org/10.1093/bioinformatics/btae677)
+- **DeepSecE**: Zhang Y, Guan J, Li C, Wang Z, Deng Z, Gasser RB, Song J,
+  Ou HY. _Research_. 2023;6:0258. [doi:10.34133/research.0258](https://doi.org/10.34133/research.0258)
+- **SignalP 6.0**: Teufel F, Almagro Armenteros JJ, Johansen AR, et al.
+  _Nature Biotechnology_. 2022;40(7):1023-1025. [doi:10.1038/s41587-021-01156-3](https://doi.org/10.1038/s41587-021-01156-3)
+- **PLM-Effector**: _(v1.0.0 — citation on integration)_
+- **BLAST+**: Camacho C, Coulouris G, Avagyan V, et al. _BMC Bioinformatics_.
+  2009;10:421. [doi:10.1186/1471-2105-10-421](https://doi.org/10.1186/1471-2105-10-421)
+- **HH-suite3**: Steinegger M, Meier M, Mirdita M, et al. _BMC Bioinformatics_.
+  2019;20:473. [doi:10.1186/s12859-019-3019-7](https://doi.org/10.1186/s12859-019-3019-7)
+- **InterProScan 5**: Jones P, Binns D, Chang HY, et al. _Bioinformatics_.
+  2014;30(9):1236-1240. [doi:10.1093/bioinformatics/btu031](https://doi.org/10.1093/bioinformatics/btu031)
+- **Bakta**: Schwengers O, Jelonek L, Dieckmann MA, et al. _Microbial Genomics_.
+  2021;7(11):000685. [doi:10.1099/mgen.0.000685](https://doi.org/10.1099/mgen.0.000685)
+- **EggNOG-mapper**: _(v1.0.0 — citation on integration)_
+- **pLM-BLAST**: _(v1.0.0 — citation on integration)_
+- **Pyrodigal**: Larralde M. _JOSS_. 2022;7(72):4296. [doi:10.21105/joss.04296](https://doi.org/10.21105/joss.04296)
+- **Biopython**: Cock PJA, Antao T, Chang JT, et al. _Bioinformatics_.
+  2009;25(11):1422-1423. [doi:10.1093/bioinformatics/btp163](https://doi.org/10.1093/bioinformatics/btp163)
 
-- **InterProScan 5**: Jones P, Binns D, Chang HY, Fraser M, Li W, McAnulla C, McWilliam H, Maslen J, Mitchell A, Nuka G, Pesseat S, Quinn AF, Sangrador-Vegas A, Scheremetjew M, Yong SY, Lopez R, Hunter S. InterProScan 5: genome-scale protein function classification. *Bioinformatics*. 2014;30(9):1236-1240. [doi:10.1093/bioinformatics/btu031](https://doi.org/10.1093/bioinformatics/btu031)
+</details>
 
-- **Foldseek**: van Kempen M, Kim SS, Tumescheit C, Mirdita M, Lee J, Gilchrist CLM, Soding J, Steinegger M. Fast and accurate protein structure search with Foldseek. *Nature Biotechnology*. 2024;42(2):243-246. [doi:10.1038/s41587-023-01773-0](https://doi.org/10.1038/s41587-023-01773-0)
+---
 
-- **Pyrodigal**: Larralde M. Pyrodigal: Python bindings and interface to Prodigal, an efficient method for gene prediction in prokaryotes. *Journal of Open Source Software*. 2022;7(72):4296. [doi:10.21105/joss.04296](https://doi.org/10.21105/joss.04296)
+## Contributing
 
-- **Bakta**: Schwengers O, Jelonek L, Dieckmann MA, Beyvers S, Blom J, Goesmann A. Bakta: rapid and standardized annotation of bacterial genomes via alignment-free sequence identification. *Microbial Genomics*. 2021;7(11):000685. [doi:10.1099/mgen.0.000685](https://doi.org/10.1099/mgen.0.000685)
-
-- **Biopython**: Cock PJA, Antao T, Chang JT, Chapman BA, Cox CJ, Dalke A, Friedberg I, Hamelryck T, Kauff F, Wilczynski B, de Hoon MJL. Biopython: freely available Python tools for computational molecular biology and bioinformatics. *Bioinformatics*. 2009;25(11):1422-1423. [doi:10.1093/bioinformatics/btp163](https://doi.org/10.1093/bioinformatics/btp163)
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to file issues, propose
+features, and submit pull requests. Contributions welcome, especially for
+documentation and new tool integrations.
 
 ---
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+ssign is distributed under the **GNU General Public License v3.0 or later**
+(GPL-3.0-or-later). See [`LICENSE`](LICENSE).
 
-Copyright (C) 2026 Billerbeck Lab, Imperial College London.
+---
+
+## Authors
+
+- **M. Teo Reid** — primary author. Department of Bioengineering, Imperial
+  College London. ORCID: [0009-0009-9239-5743](https://orcid.org/0009-0009-9239-5743)
+- **Owen Terpstra** — Molecular Microbiology, University of Groningen.
+  ORCID: [0000-0002-8767-4061](https://orcid.org/0000-0002-8767-4061)
+- **Karan Kumar** — Industrial Systems Biotechnology Research Group, iAMB,
+  RWTH Aachen University. ORCID: [0000-0003-0012-8314](https://orcid.org/0000-0003-0012-8314)
+- **Sonja Billerbeck** _(corresponding)_ — Department of Bioengineering,
+  Imperial College London. ORCID: [0000-0002-3092-578X](https://orcid.org/0000-0002-3092-578X)
+
+Correspondence: [`s.billerbeck@imperial.ac.uk`](mailto:s.billerbeck@imperial.ac.uk)

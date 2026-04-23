@@ -4,20 +4,45 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ssign"
-version = "0.1.0"
-description = "Secretion-system Identification for Gram Negatives"
+version = "0.9.0"
+description = "Secretion-system Identification for Gram-negative bacterial genomes"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Billerbeck Lab"},
+    {name = "M. Teo Reid", email = "teoreid@gmail.com"},
+    {name = "Owen Terpstra", email = "owen.terpstra@rug.nl"},
+    {name = "Karan Kumar", email = "karan.kumar@rwth-aachen.de"},
+    {name = "Sonja Billerbeck", email = "s.billerbeck@imperial.ac.uk"},
 ]
-keywords = ["bioinformatics", "secretion-system", "gram-negative", "protein", "genomics"]
+maintainers = [
+    {name = "Sonja Billerbeck", email = "s.billerbeck@imperial.ac.uk"},
+    {name = "M. Teo Reid", email = "teoreid@gmail.com"},
+]
+keywords = [
+    "bioinformatics",
+    "secretion system",
+    "gram-negative bacteria",
+    "substrate prediction",
+    "protein localization",
+    "MacSyFinder",
+    "DeepLocPro",
+    "DeepSecE",
+    "PLM-Effector",
+    "SignalP",
+    "bacterial genomics",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
@@ -70,6 +95,9 @@ hmmsearch = "ssign_app.shims.hmmsearch:main"
 [project.urls]
 Homepage = "https://github.com/reidmat/ssign"
 Documentation = "https://github.com/reidmat/ssign#readme"
+Source = "https://github.com/reidmat/ssign"
+Issues = "https://github.com/reidmat/ssign/issues"
+Changelog = "https://github.com/reidmat/ssign/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

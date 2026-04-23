@@ -33,12 +33,14 @@ ssign_results/
 ssign_progress.json
 *_progress.json
 *.tmp
+.ssign/
 
 # Nextflow
 .nextflow/
 .nextflow.log*
 work/
-results/
+# Note: top-level `results/` is tracked (paper analysis outputs + README).
+# Nextflow's own outputs go in `work/` above.
 
 # Test artifacts
 tests/e2e_work/
@@ -46,10 +48,28 @@ tests/e2e_work/
 htmlcov/
 .coverage
 
-# Large model files (DeepSecE ESM)
+# Large model / data files — contents of data/ and models/ are fetched
+# from Zenodo at install time, not committed. README.md + checksum files
+# in those dirs ARE committed.
 *.pt
 *.bin
 *.safetensors
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.parquet
+data/**
+!data/README.md
+!data/checksums.sha256
+models/**
+!models/README.md
+!models/checksums.sha256
+
+# Container artifacts (built locally, not committed)
+*.sif
+*.tar
+*.tar.gz
 
 # Secrets / credentials
 .env
