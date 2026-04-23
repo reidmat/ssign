@@ -285,7 +285,7 @@ ssign is distributed under the **GNU General Public License v3.0 or later**
   ORCID: [0000-0002-8767-4061](https://orcid.org/0000-0002-8767-4061)
 - **Karan Kumar** — Industrial Systems Biotechnology Research Group, iAMB,
   RWTH Aachen University. ORCID: [0000-0003-0012-8314](https://orcid.org/0000-0003-0012-8314)
-- **Sonja Billerbeck** _(corresponding)_ — Department of Bioengineering,
+- **Dr. Sonja Billerbeck** — Department of Bioengineering,
   Imperial College London. ORCID: [0000-0002-3092-578X](https://orcid.org/0000-0002-3092-578X)
 
-Correspondence: [`s.billerbeck@imperial.ac.uk`](mailto:s.billerbeck@imperial.ac.uk)
+Correspondence:(mailto:t.reid25@imperial.ac.uk, s.billerbeck@imperial.ac.uk)
