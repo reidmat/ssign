@@ -48,7 +48,19 @@ _PROTEIN_TYPES = {"CDS", "sORF"}
 # voting (Phase 3.2.c). Other prefixes we see in Bakta output
 # (UniParc, SO, UniRef) are useful for provenance but aren't scoring
 # features, so we drop them at parse time to keep the output TSV narrow.
-_DBXREF_PREFIXES_TO_SURFACE = {"EC", "COG", "GO", "KEGG", "RefSeq", "Pfam"}
+#
+# Output field names align with run_eggnog.py so annotation_consensus
+# can treat Bakta and EggNOG rows uniformly (e.g. both emit `kegg_ko`
+# rather than Bakta using a custom `kegg_ko`).
+_DBXREF_PREFIX_TO_OUTPUT_KEY = {
+    "EC": "ec_numbers",
+    "COG": "cog_ids",
+    "GO": "go_terms",
+    "KEGG": "kegg_ko",
+    "RefSeq": "refseq_ids",
+    "Pfam": "pfam_ids",
+}
+_DBXREF_OUTPUT_KEYS = tuple(_DBXREF_PREFIX_TO_OUTPUT_KEY.values())
 
 
 def run_bakta(contigs_fasta, db_path, sample_id, output_dir, threads=4):
@@ -129,25 +141,9 @@ def parse_dbxrefs(dbxrefs_field):
         {"ec_numbers": ["3.6.5.n1"], "cog_ids": ["COG0481"], "go_terms": [...], ...}
     Missing prefixes map to empty lists.
     """
-    result = {
-        "ec_numbers": [],
-        "cog_ids": [],
-        "go_terms": [],
-        "kegg_ids": [],
-        "refseq_ids": [],
-        "pfam_ids": [],
-    }
+    result = {key: [] for key in _DBXREF_OUTPUT_KEYS}
     if not dbxrefs_field or not dbxrefs_field.strip():
         return result
-
-    prefix_to_key = {
-        "EC": "ec_numbers",
-        "COG": "cog_ids",
-        "GO": "go_terms",
-        "KEGG": "kegg_ids",
-        "RefSeq": "refseq_ids",
-        "Pfam": "pfam_ids",
-    }
 
     for raw_entry in dbxrefs_field.split(","):
         entry = raw_entry.strip()
@@ -156,9 +152,9 @@ def parse_dbxrefs(dbxrefs_field):
         prefix, _, value = entry.partition(":")
         prefix = prefix.strip()
         value = value.strip()
-        if not value or prefix not in _DBXREF_PREFIXES_TO_SURFACE:
+        if not value or prefix not in _DBXREF_PREFIX_TO_OUTPUT_KEY:
             continue
-        result[prefix_to_key[prefix]].append(value)
+        result[_DBXREF_PREFIX_TO_OUTPUT_KEY[prefix]].append(value)
 
     return result
 
@@ -168,7 +164,7 @@ def parse_bakta_tsv(tsv_path):
 
     Returns list of dicts in gene_info.tsv shape:
         locus_tag, protein_id, gene, product, contig, start, end, strand,
-        ec_numbers, cog_ids, go_terms, kegg_ids, refseq_ids, pfam_ids
+        ec_numbers, cog_ids, go_terms, kegg_ko, refseq_ids, pfam_ids
 
     The six cross-reference fields are lists; they're joined with
     semicolons when we write to TSV (an empty list becomes the empty
@@ -297,7 +293,7 @@ def main():
         "ec_numbers",
         "cog_ids",
         "go_terms",
-        "kegg_ids",
+        "kegg_ko",
         "refseq_ids",
         "pfam_ids",
     ]
@@ -305,7 +301,7 @@ def main():
         "ec_numbers",
         "cog_ids",
         "go_terms",
-        "kegg_ids",
+        "kegg_ko",
         "refseq_ids",
         "pfam_ids",
     }

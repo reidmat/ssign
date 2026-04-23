@@ -111,7 +111,7 @@ class TestParseBaktaTsv:
             "ec_numbers",
             "cog_ids",
             "go_terms",
-            "kegg_ids",
+            "kegg_ko",
             "refseq_ids",
             "pfam_ids",
         }
@@ -150,7 +150,7 @@ class TestParseDbxrefs:
         result = parse_dbxrefs("EC:1.2.3.4, COG:COG1234, KEGG:K99999")
         assert result["ec_numbers"] == ["1.2.3.4"]
         assert result["cog_ids"] == ["COG1234"]
-        assert result["kegg_ids"] == ["K99999"]
+        assert result["kegg_ko"] == ["K99999"]
 
     def test_go_id_with_double_prefix_preserved(self):
         """GO IDs embed another 'GO:' prefix; partition on first colon
