@@ -13,7 +13,12 @@ SCRIPTS_DIR = os.path.abspath(
 )
 sys.path.insert(0, SCRIPTS_DIR)
 
-from run_eggnog import _split_rich_field, parse_eggnog_annotations  # noqa: E402, F401
+from run_eggnog import (  # noqa: E402, F401
+    _split_rich_field,
+    load_substrate_ids,
+    parse_eggnog_annotations,
+    write_substrates_only_fasta,
+)
 
 
 # Representative emapper 2.1.x .annotations fixture. Lines starting with
@@ -198,3 +203,73 @@ class TestSplitRichField:
 
     def test_empty_fragments_dropped(self):
         assert _split_rich_field("a,,b") == ["a", "b"]
+
+
+class TestLoadSubstrateIds:
+    """Substrate-TSV locus_tag extraction for filtering the protein FASTA."""
+
+    def test_reads_locus_tags_from_tsv(self, tmp_dir):
+        path = os.path.join(tmp_dir, "substrates.tsv")
+        with open(path, "w") as f:
+            f.write("locus_tag\tother_col\n")
+            f.write("GENE_00001\tx\n")
+            f.write("GENE_00002\ty\n")
+            f.write("GENE_00003\tz\n")
+        assert load_substrate_ids(path) == {"GENE_00001", "GENE_00002", "GENE_00003"}
+
+    def test_empty_locus_tag_rows_skipped(self, tmp_dir):
+        path = os.path.join(tmp_dir, "substrates.tsv")
+        with open(path, "w") as f:
+            f.write("locus_tag\tproduct\n")
+            f.write("G1\thit\n")
+            f.write("\tghost\n")  # blank locus_tag — skip
+            f.write("G2\thit\n")
+        assert load_substrate_ids(path) == {"G1", "G2"}
+
+    def test_empty_file_returns_empty_set(self, tmp_dir):
+        path = os.path.join(tmp_dir, "substrates.tsv")
+        with open(path, "w") as f:
+            f.write("locus_tag\n")  # header only
+        assert load_substrate_ids(path) == set()
+
+
+class TestWriteSubstratesOnlyFasta:
+    def _write_proteins(self, path, seqs):
+        with open(path, "w") as f:
+            for k, v in seqs.items():
+                f.write(f">{k}\n{v}\n")
+
+    def test_writes_only_requested_ids(self, tmp_dir):
+        src = os.path.join(tmp_dir, "proteins.faa")
+        self._write_proteins(
+            src,
+            {"G1": "MKTLL", "G2": "MFVFL", "G3": "MQKAL", "G4": "MSRLK"},
+        )
+        out = os.path.join(tmp_dir, "substrates.faa")
+        n = write_substrates_only_fasta(src, {"G2", "G4"}, out)
+        assert n == 2
+        with open(out) as f:
+            body = f.read()
+        assert ">G2" in body
+        assert ">G4" in body
+        assert ">G1" not in body
+        assert ">G3" not in body
+
+    def test_missing_ids_are_silently_dropped(self, tmp_dir):
+        """If the substrates TSV references a locus_tag that doesn't exist
+        in the protein FASTA (possible if CDS sets drifted), skip rather
+        than crash — the output just has fewer rows."""
+        src = os.path.join(tmp_dir, "proteins.faa")
+        self._write_proteins(src, {"G1": "MKT"})
+        out = os.path.join(tmp_dir, "substrates.faa")
+        n = write_substrates_only_fasta(src, {"G1", "MISSING"}, out)
+        assert n == 1
+
+    def test_empty_substrate_set_writes_empty_fasta(self, tmp_dir):
+        src = os.path.join(tmp_dir, "proteins.faa")
+        self._write_proteins(src, {"G1": "MKT"})
+        out = os.path.join(tmp_dir, "substrates.faa")
+        n = write_substrates_only_fasta(src, set(), out)
+        assert n == 0
+        assert os.path.exists(out)
+        assert os.path.getsize(out) == 0

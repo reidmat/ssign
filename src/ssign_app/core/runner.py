@@ -1280,7 +1280,9 @@ class PipelineRunner:
 
         output = self._wf(f"{self.config.sample_id}_eggnog.tsv")
         args = [
-            "--input",
+            "--substrates",
+            self.files.get("substrates_filtered", ""),
+            "--proteins",
             self.files.get("proteins", ""),
             "--db",
             self.config.eggnog_db,
@@ -1309,7 +1311,9 @@ class PipelineRunner:
 
         output = self._wf(f"{self.config.sample_id}_plm_blast.tsv")
         args = [
-            "--input",
+            "--substrates",
+            self.files.get("substrates_filtered", ""),
+            "--proteins",
             self.files.get("proteins", ""),
             "--ecod-db",
             self.config.plmblast_db,

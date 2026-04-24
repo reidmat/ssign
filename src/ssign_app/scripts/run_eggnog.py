@@ -21,10 +21,16 @@ import csv
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+_scripts_dir = os.path.dirname(os.path.abspath(__file__))
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+from ssign_lib.fasta_io import read_fasta  # noqa: E402
 
 
 # emapper .annotations column names (v2.1+). The header line starts with
@@ -47,6 +53,57 @@ _COL_PFAMS = "PFAMs"
 
 # emapper uses "-" to mean "no annotation" in any rich field.
 _EMAPPER_MISSING = "-"
+
+
+def load_substrate_ids(substrates_path):
+    """Return the set of locus_tags listed in a filtered substrates TSV."""
+    ids = set()
+    with open(substrates_path) as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            tag = (row.get("locus_tag") or "").strip()
+            if tag:
+                ids.add(tag)
+    return ids
+
+
+def write_substrates_only_fasta(proteins_path, substrate_ids, out_path):
+    """Write a FASTA containing only proteins whose ID is in `substrate_ids`.
+
+    Returns the number of sequences written. If zero, EggNOG has nothing
+    to annotate and the caller should short-circuit.
+    """
+    all_seqs = read_fasta(proteins_path)
+    n = 0
+    with open(out_path, "w") as f:
+        for locus_tag in substrate_ids:
+            seq = all_seqs.get(locus_tag)
+            if not seq:
+                continue
+            f.write(f">{locus_tag}\n{seq}\n")
+            n += 1
+    return n
+
+
+_OUTPUT_FIELDNAMES = [
+    "protein_id",
+    "seed_ortholog",
+    "evalue",
+    "description",
+    "preferred_name",
+    "cog_category",
+    "ec_numbers",
+    "kegg_ko",
+    "go_terms",
+    "pfam_ids",
+]
+_LIST_FIELDS = {"ec_numbers", "kegg_ko", "go_terms", "pfam_ids"}
+
+
+def _write_empty_output(out_path):
+    """Write a header-only TSV when there are no substrates to annotate."""
+    with open(out_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=_OUTPUT_FIELDNAMES, delimiter="\t")
+        writer.writeheader()
 
 
 def run_emapper(proteins_fasta, db_path, sample_id, output_dir, threads=4):
@@ -179,9 +236,23 @@ def parse_eggnog_annotations(annotations_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run EggNOG-mapper and convert output to ssign format"
+        description=(
+            "Run EggNOG-mapper on the filtered secreted-protein substrates "
+            "and convert output to ssign format. Filters the full protein "
+            "FASTA down to just the substrates before calling emapper — "
+            "EggNOG is an annotation-tier tool, not a whole-genome step."
+        )
     )
-    parser.add_argument("--input", required=True, help="Input protein FASTA")
+    parser.add_argument(
+        "--substrates",
+        required=True,
+        help="Filtered substrates TSV (columns include locus_tag)",
+    )
+    parser.add_argument(
+        "--proteins",
+        required=True,
+        help="Full protein FASTA (pre-called by Bakta / Pyrodigal)",
+    )
     parser.add_argument("--db", required=True, help="Path to EggNOG database directory")
     parser.add_argument("--sample", required=True, help="Sample identifier")
     parser.add_argument("--threads", type=int, default=4, help="CPU threads")
@@ -190,9 +261,28 @@ def main():
     )
     args = parser.parse_args()
 
+    substrate_ids = load_substrate_ids(args.substrates)
+    if not substrate_ids:
+        logger.info("No substrates to annotate — writing empty output")
+        _write_empty_output(args.out)
+        return 0
+
     with tempfile.TemporaryDirectory() as tmpdir:
+        filtered_fasta = os.path.join(tmpdir, "substrates.faa")
+        n = write_substrates_only_fasta(args.proteins, substrate_ids, filtered_fasta)
+        if n == 0:
+            logger.warning(
+                f"No substrate proteins found in {args.proteins} "
+                f"(expected {len(substrate_ids)}); writing empty output"
+            )
+            _write_empty_output(args.out)
+            return 0
+        logger.info(
+            f"EggNOG will annotate {n} substrate proteins (of {len(substrate_ids)} listed)"
+        )
+
         annotations_path = run_emapper(
-            args.input, args.db, args.sample, tmpdir, args.threads
+            filtered_fasta, args.db, args.sample, tmpdir, args.threads
         )
         entries = parse_eggnog_annotations(annotations_path)
 
@@ -200,29 +290,18 @@ def main():
 
     # Multi-value fields are lists in `entries`; join with semicolons for
     # a single TSV cell (same convention as run_bakta.py's gene_info).
-    fieldnames = [
-        "protein_id",
-        "seed_ortholog",
-        "evalue",
-        "description",
-        "preferred_name",
-        "cog_category",
-        "ec_numbers",
-        "kegg_ko",
-        "go_terms",
-        "pfam_ids",
-    ]
-    _LIST_FIELDS = {"ec_numbers", "kegg_ko", "go_terms", "pfam_ids"}
     with open(args.out, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
+        writer = csv.DictWriter(f, fieldnames=_OUTPUT_FIELDNAMES, delimiter="\t")
         writer.writeheader()
         for e in entries:
             row = {
-                k: (";".join(e[k]) if k in _LIST_FIELDS else e[k]) for k in fieldnames
+                k: (";".join(e[k]) if k in _LIST_FIELDS else e[k])
+                for k in _OUTPUT_FIELDNAMES
             }
             writer.writerow(row)
 
     logger.info(f"Done: wrote {len(entries)} annotations to {args.out}")
+    return 0
 
 
 if __name__ == "__main__":

@@ -32,6 +32,57 @@ import tempfile
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+_scripts_dir = os.path.dirname(os.path.abspath(__file__))
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+from ssign_lib.fasta_io import read_fasta  # noqa: E402
+
+
+_OUTPUT_FIELDNAMES = [
+    "protein_id",
+    "target_id",
+    "score",
+    "qstart",
+    "qend",
+    "tstart",
+    "tend",
+]
+
+
+def load_substrate_ids(substrates_path):
+    """Return the set of locus_tags listed in a filtered substrates TSV."""
+    ids = set()
+    with open(substrates_path) as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            tag = (row.get("locus_tag") or "").strip()
+            if tag:
+                ids.add(tag)
+    return ids
+
+
+def write_substrates_only_fasta(proteins_path, substrate_ids, out_path):
+    """Write a FASTA containing only proteins whose ID is in `substrate_ids`.
+
+    Returns the number of sequences written.
+    """
+    all_seqs = read_fasta(proteins_path)
+    n = 0
+    with open(out_path, "w") as f:
+        for locus_tag in substrate_ids:
+            seq = all_seqs.get(locus_tag)
+            if not seq:
+                continue
+            f.write(f">{locus_tag}\n{seq}\n")
+            n += 1
+    return n
+
+
+def _write_empty_output(out_path):
+    """Write a header-only TSV when there are no substrates to search."""
+    with open(out_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=_OUTPUT_FIELDNAMES, delimiter="\t")
+        writer.writeheader()
+
 
 # pLM-BLAST output CSV columns (v1.x). Exact header names verified against
 # the upstream `scripts/plmblast.py` result-writer on first integration
@@ -162,9 +213,23 @@ def parse_plmblast_csv(csv_path: str):
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run pLM-BLAST against ECOD70 and convert output to ssign format"
+        description=(
+            "Run pLM-BLAST against ECOD70 on the filtered substrates and "
+            "convert output to ssign format. pLM-BLAST is an annotation-"
+            "tier tool — it runs only on the ~50 filtered substrates, not "
+            "the full ~5000-protein genome."
+        )
     )
-    parser.add_argument("--input", required=True, help="Input protein FASTA")
+    parser.add_argument(
+        "--substrates",
+        required=True,
+        help="Filtered substrates TSV (columns include locus_tag)",
+    )
+    parser.add_argument(
+        "--proteins",
+        required=True,
+        help="Full protein FASTA (pre-called by Bakta / Pyrodigal)",
+    )
     parser.add_argument(
         "--ecod-db",
         required=True,
@@ -180,8 +245,11 @@ def main() -> int:
     parser.add_argument("--threads", type=int, default=4, help="CPU threads")
     args = parser.parse_args()
 
-    if not os.path.exists(args.input):
-        print(f"ERROR: Input FASTA not found: {args.input}", file=sys.stderr)
+    if not os.path.exists(args.substrates):
+        print(f"ERROR: Substrates TSV not found: {args.substrates}", file=sys.stderr)
+        return 2
+    if not os.path.exists(args.proteins):
+        print(f"ERROR: Protein FASTA not found: {args.proteins}", file=sys.stderr)
         return 2
     if not os.path.isdir(args.ecod_db):
         print(
@@ -193,11 +261,31 @@ def main() -> int:
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
 
+    substrate_ids = load_substrate_ids(args.substrates)
+    if not substrate_ids:
+        logger.info("No substrates to search — writing empty output")
+        _write_empty_output(args.out)
+        return 0
+
     with tempfile.TemporaryDirectory() as tmpdir:
+        filtered_fasta = os.path.join(tmpdir, "substrates.faa")
+        n = write_substrates_only_fasta(args.proteins, substrate_ids, filtered_fasta)
+        if n == 0:
+            logger.warning(
+                f"No substrate proteins found in {args.proteins} "
+                f"(expected {len(substrate_ids)}); writing empty output"
+            )
+            _write_empty_output(args.out)
+            return 0
+        logger.info(
+            f"pLM-BLAST will search {n} substrate proteins "
+            f"(of {len(substrate_ids)} listed)"
+        )
+
         raw_csv = os.path.join(tmpdir, "plm_blast_raw.csv")
         try:
             run_plmblast(
-                proteins_fasta=args.input,
+                proteins_fasta=filtered_fasta,
                 ecod_db=args.ecod_db,
                 out_csv=raw_csv,
                 cpc=args.cpc,
@@ -211,17 +299,8 @@ def main() -> int:
 
     logger.info(f"Parsed {len(entries)} pLM-BLAST hits")
 
-    fieldnames = [
-        "protein_id",
-        "target_id",
-        "score",
-        "qstart",
-        "qend",
-        "tstart",
-        "tend",
-    ]
     with open(args.out, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
+        writer = csv.DictWriter(f, fieldnames=_OUTPUT_FIELDNAMES, delimiter="\t")
         writer.writeheader()
         for e in entries:
             writer.writerow(e)
