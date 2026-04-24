@@ -21,14 +21,19 @@ from Bio import SeqIO
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Annotation tool columns — used for n_tools_with_hits counting
-# SignalP is NOT here (it's a prediction tool, not annotation)
+# Annotation tool columns — used for n_tools_with_hits counting.
+# SignalP is NOT here (it's a prediction tool, not annotation).
+# Bakta and EggNOG are new in Phase 3.2.c; their columns are populated
+# by runner.py once 3.2.d wires those steps into the master-CSV merge.
+# Missing columns here are skipped at consensus time (see _compute_consensus).
 TOOL_HIT_COLUMNS = {
     "BLASTp": "blastp_hit_description",
     "HHpred_Pfam": "pfam_top1_description",
     "HHpred_PDB": "pdb_top1_description",
     "InterProScan": "interpro_descriptions",
     "pLM-BLAST": "ecod70_top1_description",
+    "Bakta": "bakta_product",
+    "EggNOG": "eggnog_description",
     "GBFF": "gbff_annotation",
 }
 
