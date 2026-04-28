@@ -47,28 +47,29 @@ _DEFAULT_MIN_OVERLAP = 0.8
 
 
 def _read_gene_info(path: str):
-    """Read a gene_info.tsv into a dict[contig] -> list[row dicts]."""
+    """Read a gene_info.tsv into a dict[contig] -> list[full row dicts].
+
+    Preserves every column in the input TSV so Bakta's rich annotation
+    fields (ec_numbers, cog_ids, go_terms, kegg_ko, refseq_ids, pfam_ids,
+    gene, protein_id, ...) survive the mapping step. start/end are
+    coerced to int for the overlap arithmetic.
+    """
     by_contig = defaultdict(list)
     with open(path) as f:
         reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
+        for raw in reader:
+            row = dict(raw)
             contig = (row.get("contig") or "").strip()
             if not contig:
                 continue
             try:
-                start = int(row.get("start", 0))
-                end = int(row.get("end", 0))
+                row["start"] = int(row.get("start", 0))
+                row["end"] = int(row.get("end", 0))
             except (ValueError, TypeError):
                 continue
-            by_contig[contig].append(
-                {
-                    "locus_tag": (row.get("locus_tag") or "").strip(),
-                    "start": start,
-                    "end": end,
-                    "strand": (row.get("strand") or "+").strip(),
-                    "product": (row.get("product") or "").strip(),
-                }
-            )
+            row["contig"] = contig
+            row["strand"] = (row.get("strand") or "+").strip()
+            by_contig[contig].append(row)
     # Sort each contig's CDS by start so overlap search can short-circuit
     for contig in by_contig:
         by_contig[contig].sort(key=lambda r: r["start"])
@@ -129,17 +130,17 @@ def map_gbff_to_bakta(
     Iterates Bakta's CDS; for each, looks up the best GenBank match on
     the same contig by reciprocal overlap. Emits rows in Bakta's order
     so the output preserves the locus-tag assignment downstream code
-    keys on.
+    keys on. All Bakta columns (ec_numbers, cog_ids, etc.) are
+    preserved unchanged — only `gbff_annotation` is added.
     """
     for contig, bakta_rows in bakta_by_contig.items():
         gbff_candidates = gbff_by_contig.get(contig, [])
         for bakta in bakta_rows:
             match = best_gbff_match(bakta, gbff_candidates, min_overlap=min_overlap)
-            yield {
-                **bakta,
-                "contig": contig,
-                "gbff_annotation": match["product"] if match else "",
-            }
+            row = dict(bakta)
+            row["contig"] = contig
+            row["gbff_annotation"] = (match or {}).get("product", "")
+            yield row
 
 
 def main() -> int:
@@ -175,15 +176,15 @@ def main() -> int:
     bakta = _read_gene_info(args.bakta_gene_info)
     gbff = _read_gene_info(args.genbank_gene_info)
 
-    fieldnames = [
-        "locus_tag",
-        "contig",
-        "start",
-        "end",
-        "strand",
-        "product",
-        "gbff_annotation",
-    ]
+    # Preserve every column the Bakta TSV had; tack on `gbff_annotation`
+    # at the end. We re-read Bakta's header directly so any future Bakta
+    # columns flow through without code changes here.
+    with open(args.bakta_gene_info) as f:
+        bakta_header = next(csv.reader(f, delimiter="\t"))
+    fieldnames = list(bakta_header)
+    if "gbff_annotation" not in fieldnames:
+        fieldnames.append("gbff_annotation")
+
     n_mapped = 0
     n_total = 0
     with open(args.out, "w", newline="") as f:

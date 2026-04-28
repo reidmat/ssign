@@ -48,9 +48,17 @@ class PipelineConfig:
     proximity_window: int = 3
     required_fraction_correct: float = 0.8
 
-    # Phase 1: ORF prediction options (for FASTA contigs input)
-    run_bakta: bool = False  # Use Bakta instead of Prodigal for ORF prediction
-    bakta_db: str = ""  # Path to Bakta database (required if run_bakta=True)
+    # Phase 1: ORF prediction options
+    # GenBank input is re-annotated through Bakta by default (Phase 3.3.c).
+    # Original GenBank product strings are preserved as `gbff_annotation`
+    # for annotation-consensus voting via map_gbff_to_bakta_cds.py.
+    # Set use_input_annotations=True to skip Bakta and trust the input
+    # annotations as-is — useful for hand-curated GenBank files.
+    use_input_annotations: bool = False
+    # FASTA contigs input always needs an ORF caller. run_bakta=True picks
+    # Bakta (richer); otherwise Pyrodigal runs via extract_proteins.py.
+    run_bakta: bool = False
+    bakta_db: str = ""  # Required for any Bakta run (FASTA or GenBank re-annotation)
     bakta_threads: int = 4
 
     # Phase 3: Tool paths (DTU licensed)
@@ -579,25 +587,121 @@ class PipelineRunner:
             return StepResult("detect_format", True, f"Format: {fmt}")
         return StepResult("detect_format", False, stderr[:500])
 
+    def _genbank_to_contigs_fasta(self, gbff_path: str, out_fasta: str) -> None:
+        """Write a contigs FASTA from a GenBank file (one record = one contig).
+
+        Bakta only ingests nucleotide FASTA, so to re-annotate GenBank
+        input we strip out the contig sequences first. SeqIO handles the
+        format conversion natively.
+        """
+        from Bio import SeqIO
+
+        with open(out_fasta, "w") as f:
+            for record in SeqIO.parse(gbff_path, "genbank"):
+                f.write(f">{record.id}\n{str(record.seq)}\n")
+
+    def _run_extract_proteins_script(
+        self, proteins_out: str, gene_info_out: str, metadata_out: str
+    ) -> tuple:
+        """Invoke extract_proteins.py with this run's input + sample id.
+
+        Returns (rc, stderr). All three output paths are required by the
+        script.
+        """
+        args = [
+            "--input",
+            self.config.input_path,
+            "--sample",
+            self.config.sample_id,
+            "--out-proteins",
+            proteins_out,
+            "--out-gene-info",
+            gene_info_out,
+            "--out-metadata",
+            metadata_out,
+        ]
+        if self.config.original_filename:
+            args.extend(["--original-filename", self.config.original_filename])
+        rc, _, stderr = run_script("extract_proteins.py", args)
+        return rc, stderr
+
     def _step_extract_proteins(self) -> StepResult:
         proteins_path = self._wf(f"{self.config.sample_id}_proteins.faa")
         gene_info_path = self._wf(f"{self.config.sample_id}_gene_info.tsv")
+        metadata_path = self._wf(f"{self.config.sample_id}_metadata.json")
         fmt = self.files.get("format", "")
 
-        if fmt == "fasta_contigs" and self.config.run_bakta:
-            # Use Bakta for richer annotation of raw contig FASTA
+        # Decide the path:
+        # - GenBank with use_input_annotations=False (default): re-annotate
+        #   via Bakta, preserve original products as gbff_annotation.
+        # - GenBank with use_input_annotations=True: parse GenBank only.
+        # - FASTA contigs with run_bakta=True: Bakta directly (no overlap map).
+        # - FASTA contigs with run_bakta=False: Pyrodigal via extract_proteins.
+        # - protein_fasta or gff3: extract_proteins handles them; Bakta can't.
+        reannotate_gbff = (
+            fmt == "genbank" and not self.config.use_input_annotations
+        )
+        bakta_only = fmt == "fasta_contigs" and self.config.run_bakta
+
+        if reannotate_gbff or bakta_only:
             if not self.config.bakta_db:
                 return StepResult(
                     "extract_proteins",
                     False,
-                    "Bakta mode requires --bakta-db path. "
-                    "Download with: bakta_db download --output /path/to/db --type light",
+                    "Bakta re-annotation requires --bakta-db path. "
+                    "Pass --use-input-annotations to skip Bakta and parse the "
+                    "input file's annotations as-is. "
+                    "Download a DB with: bakta_db download --output /path/to/db --type light",
                 )
+
+            # For GenBank: capture the original annotations into a side
+            # gene_info.tsv first (to be mapped onto Bakta's CDS later).
+            # The companion _gbff_proteins.faa is kept on disk for
+            # provenance/debugging; downstream uses Bakta's proteins.
+            gbff_gene_info_path = ""
+            if reannotate_gbff:
+                gbff_gene_info_path = self._wf(
+                    f"{self.config.sample_id}_gbff_gene_info.tsv"
+                )
+                gbff_proteins_path = self._wf(
+                    f"{self.config.sample_id}_gbff_proteins.faa"
+                )
+                rc, stderr = self._run_extract_proteins_script(
+                    gbff_proteins_path, gbff_gene_info_path, metadata_path
+                )
+                if rc != 0:
+                    return StepResult(
+                        "extract_proteins",
+                        False,
+                        f"GenBank parse failed: {stderr[:300]}",
+                    )
+
+                # GenBank → contigs FASTA for Bakta
+                bakta_input = self._wf(f"{self.config.sample_id}_contigs.fna")
+                try:
+                    self._genbank_to_contigs_fasta(self.config.input_path, bakta_input)
+                except Exception as e:
+                    return StepResult(
+                        "extract_proteins",
+                        False,
+                        f"GenBank → FASTA conversion failed: {e}",
+                    )
+            else:
+                bakta_input = self.config.input_path
+
+            # Run Bakta. For GenBank, write to a side file so the overlap
+            # mapper can layer gbff_annotation in afterwards. For FASTA
+            # contigs (no GenBank source), write straight to gene_info_path.
+            bakta_gene_info_path = (
+                self._wf(f"{self.config.sample_id}_bakta_gene_info.tsv")
+                if reannotate_gbff
+                else gene_info_path
+            )
             rc, stdout, stderr = run_script(
                 "run_bakta.py",
                 [
                     "--input",
-                    self.config.input_path,
+                    bakta_input,
                     "--db",
                     self.config.bakta_db,
                     "--sample",
@@ -607,34 +711,45 @@ class PipelineRunner:
                     "--out-proteins",
                     proteins_path,
                     "--out-gene-info",
-                    gene_info_path,
+                    bakta_gene_info_path,
                 ],
                 timeout=14400,
             )
-            tool_name = "Bakta"
-        else:
-            # Handles GenBank, GFF3, and FASTA contigs (via Prodigal)
-            metadata_path = self._wf(f"{self.config.sample_id}_metadata.json")
-            extract_args = [
-                "--input",
-                self.config.input_path,
-                "--sample",
-                self.config.sample_id,
-                "--out-proteins",
-                proteins_path,
-                "--out-gene-info",
-                gene_info_path,
-                "--out-metadata",
-                metadata_path,
-            ]
-            if self.config.original_filename:
-                extract_args.extend(
-                    ["--original-filename", self.config.original_filename]
+            if rc != 0:
+                return StepResult("extract_proteins", False, stderr[:500])
+
+            # Layer the original GenBank product strings onto Bakta's CDS
+            # via reciprocal coordinate overlap (Phase 3.3.b).
+            if reannotate_gbff:
+                rc, _, stderr = run_script(
+                    "map_gbff_to_bakta_cds.py",
+                    [
+                        "--bakta-gene-info",
+                        bakta_gene_info_path,
+                        "--genbank-gene-info",
+                        gbff_gene_info_path,
+                        "--out",
+                        gene_info_path,
+                    ],
                 )
-            rc, stdout, stderr = run_script("extract_proteins.py", extract_args)
+                if rc != 0:
+                    return StepResult(
+                        "extract_proteins",
+                        False,
+                        f"GenBank → Bakta annotation mapping failed: {stderr[:300]}",
+                    )
+
+            tool_name = "Bakta (re-annotated)" if reannotate_gbff else "Bakta"
+        else:
+            # GenBank with --use-input-annotations, GFF3, FASTA contigs
+            # without Bakta, or protein FASTA — extract_proteins.py handles all.
+            rc, stderr = self._run_extract_proteins_script(
+                proteins_path, gene_info_path, metadata_path
+            )
             tool_name = {
                 "fasta_contigs": "Prodigal",
                 "protein_fasta": "Protein FASTA",
+                "genbank": "GenBank parser (input annotations preserved)",
             }.get(fmt, "GenBank parser")
 
         if rc == 0:

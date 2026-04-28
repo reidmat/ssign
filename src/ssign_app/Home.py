@@ -571,8 +571,21 @@ with tab_upload:
             help="Bakta provides richer genome annotation than Prodigal, including "
             "gene names and functional descriptions. Only needed for raw FASTA input.",
         )
+        # Phase 3.3.c: GenBank input is re-annotated through Bakta by
+        # default for uniform annotation across a cohort. Original
+        # annotations are kept as `gbff_annotation` for consensus voting.
+        st.checkbox(
+            "Use input GenBank annotations as-is (skip Bakta re-annotation)",
+            value=False,
+            key="use_input_annotations",
+            disabled=not bakta_available,
+            help="By default, GenBank input is re-annotated by Bakta so all genomes "
+            "in a cohort share the same annotation pipeline. Original product strings "
+            "are preserved as a `gbff_annotation` column. Tick this box to skip "
+            "re-annotation when you trust the input annotations (e.g. hand-curated GenBank).",
+        )
         if bakta_available:
-            if use_bakta:
+            if use_bakta or not st.session_state.get("use_input_annotations", False):
                 st.text_input(
                     "Bakta database path",
                     key="bakta_db_path",
@@ -580,7 +593,8 @@ with tab_upload:
                 )
         else:
             st.info(
-                "**Bakta is not installed** but is optional for raw FASTA input.\n\n"
+                "**Bakta is not installed.** Required for GenBank re-annotation "
+                "(default) and optional for raw FASTA input.\n\n"
                 "Install (~2 GB): `pip install ssign[bakta]` then download the database.\n\n"
                 "See the [installation guide](https://github.com/billerbeck-lab/ssign/blob/main/docs/optional_tools.md) "
                 "for detailed instructions."
@@ -1632,6 +1646,9 @@ with tab_run:
                     outdir=st.session_state.get("outdir_input", "./results"),
                     run_bakta=st.session_state.get("use_bakta", False),
                     bakta_db=st.session_state.get("bakta_db_path", ""),
+                    use_input_annotations=st.session_state.get(
+                        "use_input_annotations", False
+                    ),
                     wholeness_threshold=st.session_state.get("wholeness", 0.8),
                     excluded_systems=st.session_state.get(
                         "excluded", ["Flagellum", "Tad", "T3SS"]

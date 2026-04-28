@@ -113,18 +113,28 @@ def main():
     df = pd.read_csv(args.substrates_filtered, sep="\t")
     logger.info(f"Base: {len(df)} filtered substrates for {args.sample}")
 
-    # Add GBFF annotation from gene_info (original genome annotations)
+    # Add GBFF annotation from gene_info (original genome annotations).
+    # If Phase 3.3.c re-annotation ran, gene_info already has a
+    # `gbff_annotation` column carrying the original GenBank product —
+    # use it directly. Otherwise (use_input_annotations=True, FASTA
+    # contigs, etc.) fall back to renaming `product`.
     if args.gene_info and os.path.exists(args.gene_info):
         try:
             gi = pd.read_csv(args.gene_info, sep="\t")
-            if "locus_tag" in gi.columns and "product" in gi.columns:
-                gi_ann = gi[["locus_tag", "product"]].copy()
-                gi_ann = gi_ann.rename(columns={"product": "gbff_annotation"})
-                gi_ann = gi_ann.drop_duplicates(subset="locus_tag")
-                before = len(df)
-                df = df.merge(gi_ann, on="locus_tag", how="left")
-                assert len(df) == before
-                logger.info("Added GBFF annotations from gene_info")
+            if "locus_tag" in gi.columns:
+                if "gbff_annotation" in gi.columns:
+                    gi_ann = gi[["locus_tag", "gbff_annotation"]].copy()
+                elif "product" in gi.columns:
+                    gi_ann = gi[["locus_tag", "product"]].copy()
+                    gi_ann = gi_ann.rename(columns={"product": "gbff_annotation"})
+                else:
+                    gi_ann = None
+                if gi_ann is not None:
+                    gi_ann = gi_ann.drop_duplicates(subset="locus_tag")
+                    before = len(df)
+                    df = df.merge(gi_ann, on="locus_tag", how="left")
+                    assert len(df) == before
+                    logger.info("Added GBFF annotations from gene_info")
         except Exception as e:
             logger.warning(f"Failed to add GBFF annotations: {e}")
 

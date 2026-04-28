@@ -168,6 +168,22 @@ class TestMapGbffToBakta:
         assert rows[0]["gbff_annotation"] == "first"
         assert rows[1]["gbff_annotation"] == "second"
 
+    def test_preserves_bakta_rich_columns(self):
+        """Bakta's annotation columns (ec_numbers, kegg_ko, ...) must
+        survive the mapping — they're the canonical functional source."""
+        bakta_row = _cds("B1", "c1", 100, 200, "+", "lipase")
+        bakta_row["ec_numbers"] = "3.1.1.3"
+        bakta_row["kegg_ko"] = "K01045"
+        bakta_row["pfam_ids"] = "PF00657;PF12697"
+        bakta = {"c1": [bakta_row]}
+        gbff = {"c1": [_cds("G1", "c1", 100, 200, "+", "esterase")]}
+        rows = list(map_gbff_to_bakta(bakta, gbff))
+        assert rows[0]["gbff_annotation"] == "esterase"
+        assert rows[0]["product"] == "lipase"
+        assert rows[0]["ec_numbers"] == "3.1.1.3"
+        assert rows[0]["kegg_ko"] == "K01045"
+        assert rows[0]["pfam_ids"] == "PF00657;PF12697"
+
 
 class TestReadGeneInfo:
     def test_reads_valid_rows(self, tmp_dir):
