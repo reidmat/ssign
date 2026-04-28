@@ -41,8 +41,10 @@ _COL_GENE = "Gene"
 _COL_PRODUCT = "Product"
 _COL_DBXREFS = "DbXrefs"
 
-# Only these feature types contain proteins
-_PROTEIN_TYPES = {"CDS", "sORF"}
+# Only these feature types contain proteins. Bakta 1.12+ writes them
+# lowercase (`cds`, `sorf`); compare case-insensitively to stay robust
+# across Bakta versions.
+_PROTEIN_TYPES = {"cds", "sorf"}
 
 # Prefixes we surface from the DbXrefs column for annotation-consensus
 # voting (Phase 3.2.c). Other prefixes we see in Bakta output
@@ -171,40 +173,53 @@ def parse_bakta_tsv(tsv_path):
     string). Annotation-consensus voting (Phase 3.2.c) uses these to
     map each protein to broad functional categories.
     """
-    entries = []
+    # Bakta TSV starts with "# " comment lines (software version, DB
+    # version, DOI, URL) followed by a header row that *also* begins with
+    # "#" but is the column header itself (e.g. "#Sequence Id\tType\t...").
+    # Drop the comment lines and strip the leading "#" off the header so
+    # DictReader sees the column names.
     with open(tsv_path) as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            feat_type = row.get(_COL_TYPE, "").strip()
-            if feat_type not in _PROTEIN_TYPES:
+        lines = []
+        for line in f:
+            if line.startswith("# "):
                 continue
+            if line.startswith("#"):
+                line = line[1:]
+            lines.append(line)
 
-            locus_tag = row.get(_COL_LOCUS_TAG, "").strip()
-            if not locus_tag:
-                continue
+    entries = []
+    reader = csv.DictReader(lines, delimiter="\t")
+    for row in reader:
+        feat_type = row.get(_COL_TYPE, "").strip().lower()
+        if feat_type not in _PROTEIN_TYPES:
+            continue
 
-            try:
-                start = int(row.get(_COL_START, 0)) - 1  # Convert to 0-based
-                end = int(row.get(_COL_STOP, 0))
-            except (ValueError, TypeError):
-                start, end = 0, 0
+        locus_tag = row.get(_COL_LOCUS_TAG, "").strip()
+        if not locus_tag:
+            continue
 
-            xrefs = parse_dbxrefs(row.get(_COL_DBXREFS, ""))
+        try:
+            start = int(row.get(_COL_START, 0)) - 1  # Convert to 0-based
+            end = int(row.get(_COL_STOP, 0))
+        except (ValueError, TypeError):
+            start, end = 0, 0
 
-            entries.append(
-                {
-                    "locus_tag": locus_tag,
-                    "protein_id": "",
-                    "gene": row.get(_COL_GENE, "").strip(),
-                    "product": row.get(_COL_PRODUCT, "hypothetical protein").strip()
-                    or "hypothetical protein",
-                    "contig": row.get(_COL_SEQ_ID, "").strip(),
-                    "start": start,
-                    "end": end,
-                    "strand": row.get(_COL_STRAND, "+").strip(),
-                    **xrefs,
-                }
-            )
+        xrefs = parse_dbxrefs(row.get(_COL_DBXREFS, ""))
+
+        entries.append(
+            {
+                "locus_tag": locus_tag,
+                "protein_id": "",
+                "gene": row.get(_COL_GENE, "").strip(),
+                "product": row.get(_COL_PRODUCT, "hypothetical protein").strip()
+                or "hypothetical protein",
+                "contig": row.get(_COL_SEQ_ID, "").strip(),
+                "start": start,
+                "end": end,
+                "strand": row.get(_COL_STRAND, "+").strip(),
+                **xrefs,
+            }
+        )
 
     return entries
 

@@ -16,15 +16,20 @@ sys.path.insert(0, SCRIPTS_DIR)
 from run_bakta import parse_bakta_tsv, parse_dbxrefs, write_proteins_fasta  # noqa: E402, F401
 
 
-# Minimal Bakta TSV fixture. Real Bakta output also contains header lines
-# starting with '#' before the column header — we skip them the way
-# csv.DictReader would (first non-'#' line is the header).
+# Bakta TSV fixture mirroring the real Bakta 1.12 output format:
+#   - Comment lines starting with "# " (software / DB / DOI / URL).
+#   - A header line that *also* starts with "#" but is the column header
+#     itself (e.g. "#Sequence Id\tType\t...").
+#   - Type values are lowercase ("cds", "sorf", "trna").
 _BAKTA_TSV_FIXTURE = (
-    "Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\tDbXrefs\n"
-    "contig_1\tCDS\t100\t450\t+\tGENE_00001\tlepA\tGTP-binding protein LepA\tEC:3.6.5.n1, COG:COG0481\n"
-    "contig_1\tCDS\t500\t800\t-\tGENE_00002\t\thypothetical protein\t\n"
-    "contig_1\ttRNA\t900\t970\t+\tGENE_00003\t\ttRNA-Ala\t\n"
-    "contig_2\tsORF\t50\t200\t+\tGENE_00004\t\tsmall hypothetical protein\t\n"
+    "# Annotated with Bakta\n"
+    "# Software: v1.12.0\n"
+    "# Database: v6.0, light\n"
+    "#Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\tDbXrefs\n"
+    "contig_1\tcds\t100\t450\t+\tGENE_00001\tlepA\tGTP-binding protein LepA\tEC:3.6.5.n1, COG:COG0481\n"
+    "contig_1\tcds\t500\t800\t-\tGENE_00002\t\thypothetical protein\t\n"
+    "contig_1\ttrna\t900\t970\t+\tGENE_00003\t\ttRNA-Ala\t\n"
+    "contig_2\tsorf\t50\t200\t+\tGENE_00004\t\tsmall hypothetical protein\t\n"
 )
 
 _BAKTA_FAA_FIXTURE = (
@@ -72,8 +77,8 @@ class TestParseBaktaTsv:
         tsv = os.path.join(tmp_dir, "sample.tsv")
         with open(tsv, "w") as f:
             f.write(
-                "Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\tDbXrefs\n"
-                "contig_1\tCDS\t1\t99\t+\tG1\t\t\t\n"
+                "#Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\tDbXrefs\n"
+                "contig_1\tcds\t1\t99\t+\tG1\t\t\t\n"
             )
 
         entries = parse_bakta_tsv(tsv)
@@ -83,9 +88,9 @@ class TestParseBaktaTsv:
         tsv = os.path.join(tmp_dir, "sample.tsv")
         with open(tsv, "w") as f:
             f.write(
-                "Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\tDbXrefs\n"
-                "contig_1\tCDS\t1\t99\t+\t\t\tsomething\t\n"
-                "contig_1\tCDS\t200\t299\t+\tG2\t\tsomething else\t\n"
+                "#Sequence Id\tType\tStart\tStop\tStrand\tLocus Tag\tGene\tProduct\tDbXrefs\n"
+                "contig_1\tcds\t1\t99\t+\t\t\tsomething\t\n"
+                "contig_1\tcds\t200\t299\t+\tG2\t\tsomething else\t\n"
             )
 
         entries = parse_bakta_tsv(tsv)
