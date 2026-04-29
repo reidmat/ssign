@@ -81,13 +81,52 @@ By default, ssign runs DeepLocPro via the free DTU cloud API. Local mode is fast
 
 ## SignalP 6.0 (Local Mode) — Faster Signal Peptide Prediction
 
-By default, ssign runs SignalP via the free DTU cloud API. Local mode is faster but requires a DTU academic license and approximately **1 GB** download.
+By default, ssign runs SignalP via the free DTU cloud API. Local mode is faster but requires a DTU academic license and approximately **1.5 GB** download.
 
-### All platforms
+### Why a separate environment
 
-1. Register for a free academic license at [DTU SignalP 6.0](https://services.healthtech.dtu.dk/services/SignalP-6.0/)
-2. Download and install following DTU's instructions
-3. In ssign, select "Local install" for SignalP and enter the install path
+SignalP 6.0 pins **Python ≤ 3.10** and **PyTorch < 2.0**, while ssign itself runs on Python 3.11+ with PyTorch 2.x. Installing SignalP into your ssign env will downgrade PyTorch and break DeepSecE / DeepLocPro / PLM-Effector / pLM-BLAST. Install SignalP into its own env and point ssign at the binary via `--signalp-path`.
+
+### Install (Linux/macOS)
+
+```bash
+# 1. Register and download from DTU (requires academic email):
+#    https://services.healthtech.dtu.dk/services/SignalP-6.0/
+#    Pick the "fast" model variant (signalp-6.0i.fast.tar.gz, ~1.5 GB).
+
+# 2. Create a dedicated Python 3.10 env (using micromamba, conda, or venv).
+#    Example with micromamba:
+micromamba create -n signalp6 -c conda-forge python=3.10 pip "numpy<2" -y
+micromamba activate signalp6
+
+# 3. Pre-install CPU-only torch<2 BEFORE the package, so torch 2.x isn't
+#    pulled in transitively (also keeps the wheel small at ~150 MB):
+pip install "torch<2.0" --index-url https://download.pytorch.org/whl/cpu
+
+# 4. Extract and install:
+tar xzf ~/Downloads/signalp-6.0i.fast.tar.gz -C ~/build
+cd ~/build/signalp6_fast
+pip install ./signalp-6-package/
+
+# 5. Copy the model weights into the installed package directory:
+SIGNALP_DIR=$(python -c "import signalp, os; print(os.path.dirname(signalp.__file__))")
+cp -r signalp-6-package/models/* "$SIGNALP_DIR/model_weights/"
+
+# 6. Verify:
+signalp6 --version
+```
+
+### Wire ssign to the local install
+
+Pass the directory containing the `signalp6` console script (typically `<env>/bin`) via `--signalp-path` on the CLI, or set it in the GUI's local-install field.
+
+```bash
+# Example for the integration test:
+SSIGN_SIGNALP_PATH=~/micromamba/envs/signalp6/bin pytest -m integration \
+    tests/integration/test_run_signalp_integration.py::TestLocal
+```
+
+ssign invokes SignalP with `--organism other --mode fast --format txt` (gram-negative bacteria use the `other` group in v6 — v5's `gram-` was removed).
 
 ---
 

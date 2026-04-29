@@ -143,3 +143,29 @@ testpaths = ["tests/unit", "tests/integration"]
 markers = [
     "integration: per-tool or whole-pipeline tests that require external tools to be installed. Skipped automatically when a tool or its database is missing. Run explicitly with `pytest -m integration`.",
 ]
+
+[tool.ruff]
+# Default 88 is too tight for the bioinformatics-style identifiers and
+# embedded f-string error messages this codebase uses; 120 is a common
+# modern choice that doesn't force constant line-wrapping of error
+# strings, FRAGILE comments, or long fixture FASTA sequences.
+line-length = 120
+
+[tool.ruff.lint]
+# Start permissive: pyflakes (F) catches real bugs, pycodestyle (E/W)
+# catches obvious style issues. Import sorting (I), naming (N), and
+# docstring rules (D) are deferred to Phase 6 (see plan).
+select = ["E", "F", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts in src/ssign_app/scripts/ and bin/ use sys.path manipulation
+# to import from ssign_lib before the rest of the imports — required
+# because they run both as standalone scripts and as installed-package
+# code. The mangling MUST happen before the ssign_lib import.
+"src/ssign_app/scripts/*" = ["E402"]
+"bin/*" = ["E402"]
+# Streamlit GUI interleaves component imports with HTML/CSS rendering,
+# and the user-facing text strings (st.warning, st.markdown) carry full
+# GitHub URLs to docs which exceed 120 chars. Line-length doesn't carry
+# the same maintenance cost in user-facing prose as in code.
+"src/ssign_app/Home.py" = ["E402", "E501"]
