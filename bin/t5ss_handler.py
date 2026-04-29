@@ -19,11 +19,11 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-import os as _os, sys as _sys
+import os as _os
+import sys as _sys
 _scripts_dir = _os.path.dirname(_os.path.abspath(__file__))
 if _scripts_dir not in _sys.path:
     _sys.path.insert(0, _scripts_dir)
-from ssign_lib.constants import MIN_PASSENGER_LENGTH, LINKER_LENGTH
 
 
 def main():

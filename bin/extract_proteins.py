@@ -224,7 +224,7 @@ def main():
             sys.exit(1)
         entries = list(extract_from_gff3(args.input, args.fasta, args.sample))
     elif ext in ('.fasta', '.fna', '.fa'):
-        logger.info(f"FASTA contigs detected — running Pyrodigal gene prediction")
+        logger.info("FASTA contigs detected — running Pyrodigal gene prediction")
         entries = list(extract_from_fasta_contigs(args.input, args.sample))
     elif ext == '.faa':
         # Pre-translated protein FASTA — read directly

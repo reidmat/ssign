@@ -13,13 +13,37 @@ Nextflow pipeline.  OBO downloads use HTTPS.
 import logging
 import os
 import urllib.request
-from typing import Any
 
-import networkx
-import obonet
-from goatools.base import download_go_basic_obo
-from goatools.mapslim import mapslim
-from goatools.obo_parser import GODag
+# FRAGILE: networkx, obonet, and goatools are required dependencies for GO analysis
+# If any of these breaks: install the missing package with pip
+try:
+    import networkx
+except ImportError as e:
+    raise RuntimeError(
+        f"networkx not installed: {e}\n"
+        f"  How to fix:\n"
+        f"    - pip install networkx"
+    ) from e
+
+try:
+    import obonet
+except ImportError as e:
+    raise RuntimeError(
+        f"obonet not installed: {e}\n"
+        f"  How to fix:\n"
+        f"    - pip install obonet"
+    ) from e
+
+try:
+    from goatools.base import download_go_basic_obo
+    from goatools.mapslim import mapslim
+    from goatools.obo_parser import GODag
+except ImportError as e:
+    raise RuntimeError(
+        f"goatools not installed: {e}\n"
+        f"  How to fix:\n"
+        f"    - pip install goatools"
+    ) from e
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +198,19 @@ def load_go_dags(data_dir: str) -> tuple[GODag, GODag]:
     # Download go-basic.obo if missing
     if not os.path.exists(obo_path):
         logger.info("Downloading go-basic.obo to %s ...", obo_path)
-        download_go_basic_obo(obo_path)
+        # FRAGILE: OBO file download requires internet access to Gene Ontology servers
+        # If this breaks: download manually from http://purl.obolibrary.org/obo/go/go-basic.obo
+        try:
+            download_go_basic_obo(obo_path)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to download go-basic.obo: {e}\n"
+                f"  Common causes:\n"
+                f"    - No internet connection or Gene Ontology server is down\n"
+                f"  How to fix:\n"
+                f"    - Download manually: wget http://purl.obolibrary.org/obo/go/go-basic.obo -O \"{obo_path}\"\n"
+                f"    - Or: curl -L -o \"{obo_path}\" http://purl.obolibrary.org/obo/go/go-basic.obo"
+            ) from e
     else:
         logger.debug("go-basic.obo already cached at %s", obo_path)
 
@@ -185,9 +221,21 @@ def load_go_dags(data_dir: str) -> tuple[GODag, GODag]:
             "goslim_metagenomics.obo"
         )
         logger.info("Downloading goslim_metagenomics.obo from %s ...", url)
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req) as resp, open(slim_path, "wb") as out:
-            out.write(resp.read())
+        # FRAGILE: OBO slim download requires internet access to Gene Ontology servers
+        # If this breaks: download manually from the URL above
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req) as resp, open(slim_path, "wb") as out:
+                out.write(resp.read())
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to download goslim_metagenomics.obo: {e}\n"
+                f"  Common causes:\n"
+                f"    - No internet connection or Gene Ontology server is down\n"
+                f"  How to fix:\n"
+                f"    - Download manually: wget \"{url}\" -O \"{slim_path}\"\n"
+                f"    - Or: curl -L -o \"{slim_path}\" \"{url}\""
+            ) from e
     else:
         logger.debug("goslim_metagenomics.obo already cached at %s", slim_path)
 

@@ -240,7 +240,7 @@ def main():
 
     # Summary
     with open(args.out_summary, 'w') as f:
-        f.write(f"Enrichment Analysis Summary\n")
+        f.write("Enrichment Analysis Summary\n")
         f.write(f"{'='*50}\n\n")
         f.write(f"Total substrates: {len(substrates)}\n")
         f.write(f"Fisher's exact tests: {len(fisher_results)} "

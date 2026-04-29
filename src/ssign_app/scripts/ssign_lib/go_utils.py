@@ -13,7 +13,6 @@ Nextflow pipeline.  OBO downloads use HTTPS.
 import logging
 import os
 import urllib.request
-from typing import Any
 
 # FRAGILE: networkx, obonet, and goatools are required dependencies for GO analysis
 # If any of these breaks: install the missing package with pip

@@ -117,7 +117,7 @@ def main():
     if args.no_browser:
         print(f"  Open in browser: {url}", flush=True)
     else:
-        print(f"  Opening... If nothing automatically opens, try pasting", flush=True)
+        print("  Opening... If nothing automatically opens, try pasting", flush=True)
         print(f"  this into your browser: {url}", flush=True)
     print(flush=True)
 

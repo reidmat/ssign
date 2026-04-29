@@ -17,7 +17,6 @@ import csv
 import logging
 import os
 import subprocess
-import sys
 import tempfile
 from collections import defaultdict
 

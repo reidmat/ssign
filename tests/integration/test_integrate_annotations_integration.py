@@ -16,7 +16,6 @@ Run with:
 """
 
 import csv
-import os
 import subprocess
 import sys
 from pathlib import Path
