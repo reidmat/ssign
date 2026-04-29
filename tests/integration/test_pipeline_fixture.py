@@ -50,8 +50,11 @@ def _skip_unless_pipeline_prereqs_ready():
             "the DTU webface for DeepLocPro."
         )
 
-    if importlib.util.find_spec("macsypy") is None:
-        pytest.skip("MacSyFinder (macsypy) not installed")
+    # MacSyFinder 2.x renamed the Python package: `macsypy` (legacy) →
+    # `macsylib` (current). Accept either to keep this test working
+    # across MacSyFinder versions ssign deps support.
+    if importlib.util.find_spec("macsylib") is None and importlib.util.find_spec("macsypy") is None:
+        pytest.skip("MacSyFinder (macsylib/macsypy) not installed")
 
     if shutil.which("macsyfinder") is None:
         pytest.skip("macsyfinder binary not on PATH")
