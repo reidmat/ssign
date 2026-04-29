@@ -45,9 +45,14 @@ def ecod70_db():
 
 
 class TestRunPlmBlastOnFixture:
-    def test_plmblast_runs_and_produces_csv(
+    def test_full_pipeline_on_fixture(
         self, tmp_dir, t1ss_fixture_proteins, ecod70_db
     ):
+        """One run, all asserts — pLM-BLAST embed+search on the
+        minimal fixture takes ~10-15 min on CPU; running it once and
+        asserting all invariants is much faster than the previous
+        two-test split that re-embedded each time.
+        """
         out_csv = os.path.join(tmp_dir, "plm_blast.csv")
         run_plmblast(
             proteins_fasta=t1ss_fixture_proteins,
@@ -56,35 +61,21 @@ class TestRunPlmBlastOnFixture:
             cpc=70,
             threads=4,
         )
+
+        # Invariant 1: file produced + non-empty.
         assert os.path.exists(out_csv), "pLM-BLAST did not write an output CSV"
         assert os.path.getsize(out_csv) > 0, "pLM-BLAST CSV is empty"
 
-    def test_parsed_entries_have_valid_shape(
-        self, tmp_dir, t1ss_fixture_proteins, ecod70_db
-    ):
-        """At least some of the ~179 fixture proteins should pick up an ECOD
-        hit (housekeeping proteins are universally annotated). We don't pin
-        an exact count because it depends on the ECOD subset installed."""
-        out_csv = os.path.join(tmp_dir, "plm_blast.csv")
-        run_plmblast(
-            proteins_fasta=t1ss_fixture_proteins,
-            ecod_db=ecod70_db,
-            out_csv=out_csv,
-        )
-
+        # Invariant 2: parser returns at least one hit. Both fixtures
+        # contain BIMENO_04457 (autotransporter, has ECOD hits) plus
+        # housekeeping proteins that almost always pick up some hit.
         entries = parse_plmblast_csv(out_csv)
-        # Both fixtures contain BIMENO_04457 (autotransporter, has ECOD hits)
-        # plus housekeeping proteins that almost always pick up some hit.
         assert len(entries) > 0, "Expected at least one ECOD hit on the fixture"
 
+        # Invariant 3: every entry has the columns downstream code reads.
         required = {
-            "protein_id",
-            "target_id",
-            "score",
-            "qstart",
-            "qend",
-            "tstart",
-            "tend",
+            "protein_id", "target_id", "score",
+            "qstart", "qend", "tstart", "tend",
         }
         for e in entries:
             assert required <= set(e.keys())
