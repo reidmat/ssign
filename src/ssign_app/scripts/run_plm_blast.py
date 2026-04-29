@@ -137,15 +137,19 @@ def _resolve_embeddings_script(plmblast_script: str) -> str:
 def _embed_query_fasta(
     embed_script: str,
     proteins_fasta: str,
-    out_dir: str,
+    out_base: str,
     embedder: str = "pt",
 ) -> None:
-    """Run pLM-BLAST's embeddings.py to convert a FASTA into a directory
-    of per-sequence .emb files (the format plmblast.py searches).
+    """Run pLM-BLAST's embeddings.py to embed a FASTA, producing a
+    single pooled `<base>.pt` file plus a sibling `<base>.csv` index.
 
     `embedder` defaults to `pt` (ProtT5-XL UniRef50), matching the
     embedder used to build the public ECOD70 database. ESM-2 etc. will
     only work against a database embedded with that same model.
+
+    NB: embeddings.py writes the index to `<base>.pt.csv`, but
+    pLM-BLAST's search-side `_find_datatype()` looks for `<base>.csv`.
+    We rename it after embedding to bridge the gap.
     """
     # embeddings.py only accepts .csv/.p/.pkl/.fas/.fasta extensions —
     # NOT .faa, which is what ssign uses internally and what most
@@ -155,23 +159,23 @@ def _embed_query_fasta(
         embed_input = proteins_fasta
     else:
         embed_input = os.path.join(
-            os.path.dirname(out_dir), "_proteins_for_embed.fasta"
+            os.path.dirname(out_base), "_proteins_for_embed.fasta"
         )
         os.symlink(os.path.abspath(proteins_fasta), embed_input)
 
+    pt_path = f"{out_base}.pt"
     cmd = [
         "python",
         embed_script,
         "start",
         embed_input,
-        out_dir,
-        "--asdir",
+        pt_path,
         "-embedder",
         embedder,
     ]
     logger.info(
-        f"Embedding query: embeddings.py start {proteins_fasta} <dir> "
-        f"--asdir -embedder {embedder}"
+        f"Embedding query: embeddings.py start {proteins_fasta} {pt_path} "
+        f"-embedder {embedder}"
     )
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
@@ -196,6 +200,16 @@ def _embed_query_fasta(
             f"{result.stderr[:300]}"
         )
 
+    # Rename the index file (see docstring NB).
+    src_csv = f"{pt_path}.csv"
+    dst_csv = f"{out_base}.csv"
+    if not os.path.exists(src_csv):
+        raise RuntimeError(
+            f"embeddings.py exited 0 but did not produce {src_csv}; "
+            f"pLM-BLAST output layout may have changed upstream"
+        )
+    os.rename(src_csv, dst_csv)
+
 
 def run_plmblast(
     proteins_fasta: str,
@@ -206,28 +220,24 @@ def run_plmblast(
 ) -> str:
     """Run pLM-BLAST against ECOD70 and return the CSV output path.
 
-    Two-step pipeline: ProtT5-embed the query FASTA into a temp
-    directory, then search the embedding DB. The embedding step
-    dominates wall time on CPU (~5-10 sec per 500-aa protein).
+    Two-step pipeline: ProtT5-embed the query FASTA into a single
+    pooled .pt file, then search the embedding DB. Embedding dominates
+    wall time on CPU (~5-10 sec per 500-aa protein).
     """
     script = _resolve_plmblast_script()
     embed_script = _resolve_embeddings_script(script)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        query_emb_dir = os.path.join(tmpdir, "query")
-        # Step 1: embed the query FASTA. Reuses ProtT5 weights from
-        # SSIGN_PROTT5_PATH / HF cache; downloads from HuggingFace
-        # if neither is available.
-        _embed_query_fasta(embed_script, proteins_fasta, query_emb_dir)
+        query_emb_base = os.path.join(tmpdir, "query")
+        _embed_query_fasta(embed_script, proteins_fasta, query_emb_base)
 
-        # Step 2: pLM-BLAST search. plmblast.py uses single-dash long
-        # flags (`-cpc`, `-workers`) per its argparse setup in
-        # alntools/parser.py. Don't change to double-dash.
+        # plmblast.py uses single-dash long flags (`-cpc`, `-workers`)
+        # per its argparse setup in alntools/parser.py.
         cmd = [
             "python",
             script,
             ecod_db,
-            query_emb_dir,
+            query_emb_base,
             out_csv,
             "-cpc",
             str(cpc),
