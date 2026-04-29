@@ -162,3 +162,63 @@ These are captured in the `extended` and `full` extras in
 `pyproject.toml`, so `pip install ssign[extended]` resolves to the
 correct versions automatically. Listed here as a reference if you're
 debugging an install or assembling a Conda env from scratch.
+
+---
+
+## HH-suite — Profile-vs-Profile Remote Homology Search
+
+`hhsearch` and `hhblits` (Steinegger / Söding labs) detect remote
+evolutionary relationships by comparing HMM-vs-HMM profiles. ssign
+uses HH-suite to annotate substrate proteins with Pfam domain
+families and PDB structural homologs.
+
+### Install the binaries
+
+```bash
+# Bioconda (recommended)
+conda install -c bioconda hhsuite
+
+# Or build from source: https://github.com/soedinglab/hh-suite
+```
+
+### Download the databases
+
+ssign needs three precomputed databases. Two canonical mirrors host
+them; **prefer Tübingen** (fresher, recommended by Söding lab issue
+#382) and fall back to GWDG only if Tübingen is unreachable.
+
+```bash
+# Pfam — domain families. Tübingen has v38 (2024+), GWDG has v35 (2021).
+mkdir -p $HHSUITE_DBS && cd $HHSUITE_DBS
+wget http://ftp.tuebingen.mpg.de/pub/ebio/protevo/toolkit/databases/hhsuite_dbs/PfamA_v38_2.tar.gz
+tar -xzf PfamA_v38_2.tar.gz && rm PfamA_v38_2.tar.gz
+
+# PDB70 — structural homology. Tübingen has 2026-02 build, GWDG has 2022-03.
+wget http://ftp.tuebingen.mpg.de/pub/ebio/protevo/toolkit/databases/hhsuite_dbs/pdb70_from_mmcif_2026-02-20.tar.gz
+tar -xzf pdb70_from_mmcif_2026-02-20.tar.gz && rm pdb70_from_mmcif_2026-02-20.tar.gz
+
+# UniRef30 — clustered UniProt for hhblits MSA generation. Only at GWDG.
+wget https://wwwuser.gwdg.de/~compbiol/uniclust/2023_02/UniRef30_2023_02_hhsuite.tar.gz
+tar -xzf UniRef30_2023_02_hhsuite.tar.gz && rm UniRef30_2023_02_hhsuite.tar.gz
+```
+
+Total disk after extraction: ~55 GB. Tell ssign where to find them:
+
+```bash
+export SSIGN_HHSUITE_PFAM=$HHSUITE_DBS/pfam
+export SSIGN_HHSUITE_PDB70=$HHSUITE_DBS/pdb70_from_mmcif_2026-02-20
+export SSIGN_HHSUITE_UNICLUST=$HHSUITE_DBS/UniRef30_2023_02
+```
+
+### Mirror caveats
+
+The Söding lab is in maintenance mode: per [hh-suite issue
+#382](https://github.com/soedinglab/hh-suite/issues/382), no new
+funding for support. Files at GWDG are stable but stale. Tübingen
+mirror has fresher builds. If both go down for an extended period,
+ssign's Phase 7a HPC test (where DBs are pre-staged on CX3) is the
+fallback path.
+
+`curl -I` (without `-L`) reports these mirrors as 404 because the
+GWDG host issues a 302 redirect to a sibling domain. **Always probe
+with `curl -IL`** (capital L = follow redirects) to verify.
