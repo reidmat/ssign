@@ -89,9 +89,8 @@ class TestRunPlmEffectorOnFixture:
             assert "passes_threshold" in reader.fieldnames
             assert "effector_type" in reader.fieldnames
 
-        # One row per input CDS in the fixture (179 in the source assembly;
-        # allow a generous range to accommodate filtering)
-        assert 100 <= len(rows) <= 300
+        # One row per input CDS. Minimal fixture: 9 CDS. Full fixture: 179.
+        assert 5 <= len(rows) <= 300
 
         # Every row is T1SE and the flag is 0/1
         for row in rows:

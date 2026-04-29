@@ -73,7 +73,9 @@ class TestRunPlmBlastOnFixture:
         )
 
         entries = parse_plmblast_csv(out_csv)
-        assert len(entries) > 0, "Expected at least one ECOD hit on a 179-CDS fixture"
+        # Both fixtures contain BIMENO_04457 (autotransporter, has ECOD hits)
+        # plus housekeeping proteins that almost always pick up some hit.
+        assert len(entries) > 0, "Expected at least one ECOD hit on the fixture"
 
         required = {
             "protein_id",

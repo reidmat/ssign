@@ -23,13 +23,18 @@ SCRIPTS_DIR = os.path.abspath(
 sys.path.insert(0, SCRIPTS_DIR)
 
 
-T1SS_FIXTURE_GBFF = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__),
-        "..",
-        "fixtures",
-        "Xanthobacter_tagetidis_ATCC_700314_contig_87.gbff",
-    )
+_FIXTURES_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "fixtures")
+)
+T1SS_FIXTURE_GBFF = os.path.join(
+    _FIXTURES_DIR, "Xanthobacter_tagetidis_ATCC_700314_contig_87.gbff"
+)
+# Tighter ~20 kb / 9 CDS window around BIMENO_04457 (T5aSS autotransporter)
+# + flanking virulence factors. Use this for fast wrapper iteration on
+# CPU-only machines; the full 213 kb fixture takes ~6 hours just on
+# EggNOG --sensitive --iterate.
+T5ASS_MINIMAL_FIXTURE_GBFF = os.path.join(
+    _FIXTURES_DIR, "Xanthobacter_T5aSS_minimal.gbff"
 )
 
 
@@ -42,10 +47,20 @@ def tmp_dir():
 
 @pytest.fixture
 def t1ss_fixture_gbff():
-    """Path to the T1SS fixture GenBank (Xanthobacter contig_87, 213 kb, 179 CDS)."""
-    if not os.path.exists(T1SS_FIXTURE_GBFF):
-        pytest.skip(f"T1SS fixture missing: {T1SS_FIXTURE_GBFF}")
-    return T1SS_FIXTURE_GBFF
+    """Path to the GenBank fixture used by integration tests.
+
+    Defaults to the minimal ~20 kb / 9 CDS window around the T5aSS
+    autotransporter (BIMENO_04457). Set `SSIGN_TEST_FIXTURE_FULL=1` to
+    use the original 213 kb / 179 CDS fixture instead — useful for
+    cohort-scale and biological-coverage tests, but ~10-50x slower.
+    """
+    if os.environ.get("SSIGN_TEST_FIXTURE_FULL") == "1":
+        path = T1SS_FIXTURE_GBFF
+    else:
+        path = T5ASS_MINIMAL_FIXTURE_GBFF
+    if not os.path.exists(path):
+        pytest.skip(f"Fixture missing: {path}")
+    return path
 
 
 @pytest.fixture

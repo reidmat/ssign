@@ -51,8 +51,11 @@ class TestRunEmapperOnFixture:
         )
 
         entries = parse_eggnog_annotations(annotations_path)
-        assert len(entries) > 5, (
-            f"Expected >5 eggNOG annotations for 170+ proteins, got {len(entries)}"
+        # Minimal fixture (9 proteins) typically yields 3-6 OG annotations;
+        # full fixture (179 proteins) yields 100+. >2 is the lower bound that
+        # validates emapper actually annotated something.
+        assert len(entries) > 2, (
+            f"Expected >2 eggNOG annotations, got {len(entries)}"
         )
 
         required = {
