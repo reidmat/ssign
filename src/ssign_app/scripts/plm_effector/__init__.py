@@ -5,6 +5,18 @@ Original author: Dandan Zheng (`zhengdanizh@ipbcams.ac.cn`)
 Licence (for this directory only): Creative Commons Attribution 3.0. See
 `LICENSE` in this directory for the full text.
 
+Upstream commit this vendor is in sync with:
+    1a08b3e9b1c3dfe604f24a9c88a533e2043c7e45  (2026-04-10, "Update trainer.py")
+
+The substantive prediction-path files (`ensemble.py`, `feature_extraction.py`,
+`models.py`, `predict_api.py`, `inference.py`, `utils.py`) have been
+unchanged upstream since the 2026-01-29 initial upload (commit
+`c4c8a897d74073c7a027cbf097bcee47756f2f10`). Subsequent upstream commits
+are training-only (`trainer.py` updates) and do NOT affect the prediction
+path ssign uses. To re-sync against a future upstream change:
+    git diff --no-index <our plm_effector/> <upstream/PLM-Effector/>
+    re-apply our modifications (listed below) over the new files.
+
 Citation (required by CC-BY 3.0):
     Zheng, D. et al. "PLM-effector: unleashing the potential of protein
     language models for bacterial secreted protein prediction." Briefings
