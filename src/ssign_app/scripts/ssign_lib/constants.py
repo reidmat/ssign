@@ -45,12 +45,20 @@ LINKER_LENGTH = 30  # aa — alpha-helix linker between passenger and barrel
 # --- System filtering ---
 DEFAULT_EXCLUDED_SYSTEMS = ["Flagellum", "Tad", "T3SS"]
 
-# --- T5SS subtypes ---
-# Bounded set MacSyFinder/TXSScan emits for type-V secretion systems.
-# Used to apply the "Extracellular OR Outer membrane" DLP rule —
-# biology accepts both passenger-cleaved (extracellular) and surface-
-# displayed (outer-membrane-tethered) forms across all five subtypes.
-T5SS_SUBTYPES = frozenset({"T5SS", "T5aSS", "T5bSS", "T5cSS", "T5dSS", "T5eSS"})
+# --- T5SS per-component DLP rules ---
+# Per-component biology rationale lives in cross_validate_predictions.py's
+# module docstring (the consumer); this dict is the data.
+#
+# FRAGILE: gene_names are TXSScan v2.1 model IDs. If TXSScan renames a
+# component (Pfam succession, model rebuild), this dict goes stale
+# silently — affected subtypes revert to the strict ext-only rule and
+# under-call passengers. If this breaks: pin TXSScan or update keys to
+# match the new model names.
+T5SS_COMPONENT_RULES = {
+    ("T5aSS", "T5aSS_PF03797"):      ("extracellular_prob", "outer_membrane_prob"),
+    ("T5bSS", "T5bSS_translocator"): ("outer_membrane_prob",),
+    ("T5cSS", "T5cSS_PF03895"):      ("extracellular_prob", "outer_membrane_prob"),
+}
 
 # --- DeepSecE to MacSyFinder SS type mapping ---
 # DeepSecE predicts broad types; MacSyFinder uses specific names.

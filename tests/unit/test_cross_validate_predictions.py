@@ -58,7 +58,7 @@ def _sp_row(locus, prediction, probability=0.95):
 
 def _run(
     dlp=None, dse=None, plm_e=None, sp=None,
-    has_t3ss=False, conf_threshold=0.8, ss_component_types=None,
+    has_t3ss=False, conf_threshold=0.8, ss_component_info=None,
 ):
     return list(
         cross_validate(
@@ -69,7 +69,7 @@ def _run(
             sample_id="sample1",
             conf_threshold=conf_threshold,
             has_t3ss=has_t3ss,
-            ss_component_types=ss_component_types,
+            ss_component_info=ss_component_info,
         )
     )
 
@@ -194,58 +194,90 @@ class TestDseT3ssGuard:
 
 
 class TestT5SSLocalisationRule:
-    """T5SS substrates: DLP triggers on Extracellular OR Outer membrane.
+    """Per-component T5SS DLP rules — match real TXSScan biology.
 
-    Biology: T5aSS autotransporter passenger can be cleaved (extracellular)
-    or remain tethered (outer membrane). T5b/c/d/e all have similar duality
-    or surface display. The standard extracellular-only rule under-calls
-    these — relax to max(ext, om) >= conf_threshold for T5*SS components.
+    TXSScan v2 models exactly three T5 subtypes (T5a/b/c), each with one
+    HMM-modelled component (the β-barrel/translocator). The DLP rule is
+    per (ss_type, gene_name), not per subtype.
     """
 
-    def test_t5a_om_protein_triggers_dlp(self):
-        """A T5aSS component with OM=0.95, ext=0.05 should be flagged."""
+    def test_t5a_autotransporter_om_passes(self):
+        """T5aSS_PF03797 with OM=0.95 (untethered passenger) passes."""
         rows = _run(
             dlp={"G1": _dlp_row("G1", ext_prob=0.05, om_prob=0.95)},
-            ss_component_types={"G1": "T5aSS"},
+            ss_component_info={"G1": ("T5aSS", "T5aSS_PF03797")},
         )
         assert rows[0]["is_secreted"] is True
         assert rows[0]["secretion_evidence"] == "DeepLocPro"
 
-    @pytest.mark.parametrize(
-        "subtype", ["T5SS", "T5aSS", "T5bSS", "T5cSS", "T5dSS", "T5eSS"]
-    )
-    def test_all_t5_subtypes_apply_rule(self, subtype):
-        """Every TXSScan T5SS subtype gets the relaxed rule."""
+    def test_t5a_autotransporter_extracellular_passes(self):
+        """T5aSS_PF03797 with ext=0.95 (cleaved passenger) also passes."""
         rows = _run(
-            dlp={"G1": _dlp_row("G1", ext_prob=0.05, om_prob=0.95)},
-            ss_component_types={"G1": subtype},
+            dlp={"G1": _dlp_row("G1", ext_prob=0.95, om_prob=0.0)},
+            ss_component_info={"G1": ("T5aSS", "T5aSS_PF03797")},
         )
         assert rows[0]["is_secreted"] is True
 
-    def test_t5a_extracellular_protein_still_triggers(self):
-        """Standard extracellular case still works for T5SS."""
+    def test_t5b_translocator_om_passes(self):
+        """T5bSS_translocator (TpsB pore) with OM=0.95 passes — biology."""
         rows = _run(
-            dlp={"G1": _dlp_row("G1", ext_prob=0.95, om_prob=0.0)},
-            ss_component_types={"G1": "T5aSS"},
+            dlp={"G1": _dlp_row("G1", ext_prob=0.05, om_prob=0.95)},
+            ss_component_info={"G1": ("T5bSS", "T5bSS_translocator")},
         )
         assert rows[0]["is_secreted"] is True
+
+    def test_t5b_translocator_extracellular_does_NOT_pass(self):
+        """The headline correctness fix: a TpsB pore predicted as
+        extracellular is biologically wrong — pores live in the outer
+        membrane. Don't accept extracellular as evidence for TpsB."""
+        rows = _run(
+            dlp={"G1": _dlp_row("G1", ext_prob=0.95, om_prob=0.05)},
+            ss_component_info={"G1": ("T5bSS", "T5bSS_translocator")},
+        )
+        assert rows[0]["is_secreted"] is False
+        assert rows[0]["n_prediction_tools_agreeing"] == 0
+
+    @pytest.mark.parametrize(
+        "ss_type,gene_name",
+        [
+            ("T5aSS", "T5aSS_PF03797"),
+            ("T5cSS", "T5cSS_PF03895"),
+        ],
+    )
+    def test_t5a_t5c_both_localizations_valid(self, ss_type, gene_name):
+        """T5a (cleaved-or-tethered passenger) and T5c (surface-displayed
+        trimeric AT) both legitimately localize to either Extracellular
+        or Outer membrane. T5b is excluded — its translocator is OM-only."""
+        rows_om = _run(
+            dlp={"G1": _dlp_row("G1", ext_prob=0.05, om_prob=0.95)},
+            ss_component_info={"G1": (ss_type, gene_name)},
+        )
+        rows_ext = _run(
+            dlp={"G1": _dlp_row("G1", ext_prob=0.95, om_prob=0.05)},
+            ss_component_info={"G1": (ss_type, gene_name)},
+        )
+        assert rows_om[0]["is_secreted"] is True
+        assert rows_ext[0]["is_secreted"] is True
 
     def test_non_t5_om_protein_does_not_trigger(self):
         """A T1SS component with OM=0.95, ext=0.05 should NOT be flagged
         — T1SS substrates are extracellular, not OM-tethered."""
         rows = _run(
             dlp={"G1": _dlp_row("G1", ext_prob=0.05, om_prob=0.95)},
-            ss_component_types={"G1": "T1SS"},
+            ss_component_info={"G1": ("T1SS", "T1SS_abc")},
         )
         assert rows[0]["is_secreted"] is False
         assert rows[0]["n_prediction_tools_agreeing"] == 0
 
     def test_unmapped_protein_uses_standard_rule(self):
-        """Proteins absent from ss_component_types (neighborhood, not a
-        component) get the standard extracellular-only rule."""
+        """Proteins absent from ss_component_info (neighborhood, not a
+        component) get the standard extracellular-only rule. The TpsA
+        passenger of T5bSS lands here because TXSScan doesn't model it
+        as a system component — and the standard ext-only rule is
+        correct biology for the secreted partner."""
         rows = _run(
             dlp={"G1": _dlp_row("G1", ext_prob=0.05, om_prob=0.95)},
-            ss_component_types={},  # G1 not a component of any system
+            ss_component_info={},
         )
         assert rows[0]["is_secreted"] is False
 
@@ -253,16 +285,26 @@ class TestT5SSLocalisationRule:
         """If neither ext nor OM crosses threshold, even T5SS shouldn't pass."""
         rows = _run(
             dlp={"G1": _dlp_row("G1", ext_prob=0.3, om_prob=0.4)},
-            ss_component_types={"G1": "T5aSS"},
+            ss_component_info={"G1": ("T5aSS", "T5aSS_PF03797")},
             conf_threshold=0.8,
         )
         assert rows[0]["is_secreted"] is False
 
     def test_no_ss_components_arg_preserves_old_behaviour(self):
-        """Calling cross_validate without ss_component_types kwarg = same
+        """Calling cross_validate without ss_component_info kwarg = same
         behaviour as before this change."""
-        rows = _run(dlp={"G1": _dlp_row("G1", ext_prob=0.95)})  # no ss_component_types
+        rows = _run(dlp={"G1": _dlp_row("G1", ext_prob=0.95)})
         assert rows[0]["is_secreted"] is True
+
+    def test_t5_subtype_with_unknown_gene_name_falls_back(self):
+        """If MacSyFinder/TXSScan ever emits a new T5 component we
+        haven't mapped (e.g. a new T5 subtype model), fall back to the
+        safe extracellular-only rule."""
+        rows = _run(
+            dlp={"G1": _dlp_row("G1", ext_prob=0.05, om_prob=0.95)},
+            ss_component_info={"G1": ("T5aSS", "T5aSS_some_future_gene")},
+        )
+        assert rows[0]["is_secreted"] is False
 
 
 class TestOutputShape:
