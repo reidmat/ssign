@@ -5,6 +5,7 @@ Launch with: ssign (after pip install) or streamlit run Home.py
 """
 
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -110,6 +111,30 @@ def _has_previous_progress(outdir_val: str) -> bool:
         or glob.glob(os.path.join(outdir_val, "*_progress.json"))
         or os.path.exists(os.path.join(outdir_val, "ssign_progress.json"))
     )
+
+
+_SAMPLE_ID_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _sanitize_sample_id(name: str) -> str:
+    """Reduce a user-supplied filename to a safe sample-id token.
+
+    sample_id flows into output paths via `os.path.join(outdir, f"{sid}_*.csv")`.
+    A maliciously-crafted upload (e.g. `../../../etc/passwd.gbff`) would
+    otherwise let an attacker write outside outdir. Browsers typically send
+    the basename only, but a hand-crafted client can send anything — sanitise
+    defensively.
+
+    Steps:
+      1. Strip directory components via os.path.basename.
+      2. Replace runs of any character outside `[A-Za-z0-9._-]` with `_`.
+      3. Strip leading dots so the result can't be a hidden file or
+         resolve-to-parent (`..`).
+      4. Fall back to "sample" if the result is empty.
+    """
+    base = os.path.basename(str(name))
+    cleaned = _SAMPLE_ID_RE.sub("_", base).lstrip(".")
+    return cleaned or "sample"
 
 
 def _needs_run_mode_gate() -> bool:
@@ -463,14 +488,15 @@ with tab_upload:
 
         st.session_state.uploaded_files_data = uploaded_files
 
-        # Derive sample names internally (not displayed)
+        # Derive sample names internally (not displayed). Sanitised against
+        # path traversal: sample_id flows into output paths via os.path.join.
         sample_names = []
         for f in uploaded_files:
             sn = f.name
             for suffix in [".gbff", ".gbk", ".gb", ".fasta", ".fna", ".fa", ".faa"]:
                 sn = sn.replace(suffix, "")
             sn = sn.replace("_genomic", "")
-            sample_names.append(sn)
+            sample_names.append(_sanitize_sample_id(sn))
         if len(uploaded_files) == 1:
             st.session_state.sample_name = sample_names[0]
         st.session_state.sample_names = sample_names
