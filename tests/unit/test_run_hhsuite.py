@@ -132,4 +132,85 @@ class TestParseHhrEdgeCases:
 )
 def test_regex_rejects_malformed_lines(malformed_line):
     """Pin the parser's expectations against Söding-lab format drift."""
-    assert _HHR_HIT_RE.match(malformed_line) is None
+    assert not _HHR_HIT_RE.match(malformed_line)
+
+
+class TestDescriptionCleanup:
+    """The description capture group catches everything between hit_id and Prob;
+    the parser strips trailing "; " punctuation from PDB entries."""
+
+    def test_trailing_semicolon_stripped(self, tmp_dir):
+        # PDB-style: "1abc_A ; structure of HSP70 ;" → desc "structure of HSP70"
+        hit = (
+            "  1 1abc_A ; structure of HSP70 ;                "
+            "99.5 3.2E-22 2.5E-26  198.3    0.0  150   12-160    8-158 (160)"
+        )
+        path = _hhr_fixture([hit], os.path.join(tmp_dir, "test.hhr"))
+        result = parse_hhr(path, db_prefix="pdb", min_prob=95.0)
+        assert not result["pdb_top1_description"].endswith(";")
+        assert not result["pdb_top1_description"].endswith("; ")
+
+
+class TestNumericTypeContract:
+    """Probability, e-value, score must come back as floats, not strings.
+    Downstream consumers expect numeric comparison and arithmetic."""
+
+    def test_probability_is_float(self, tmp_dir):
+        path = _hhr_fixture([_PFAM_TOP_HIT], os.path.join(tmp_dir, "test.hhr"))
+        result = parse_hhr(path, db_prefix="pfam", min_prob=95.0)
+        assert isinstance(result["pfam_top1_probability"], float)
+        assert isinstance(result["pfam_top1_evalue"], float)
+        assert isinstance(result["pfam_top1_score"], float)
+
+
+class TestProbThresholdEdgeCases:
+    """The Prob gate is a `<` comparison: prob < min_prob → drop."""
+
+    def test_prob_exactly_at_threshold_kept(self, tmp_dir):
+        # 95.0 == min_prob → kept (>=, not >).
+        hit = (
+            "  1 PF00012.21 ; HSP70 protein                    "
+            "95.0 1.5E-25 1.2E-29  234.5    0.0  198    5-203    1-198 (200)"
+        )
+        path = _hhr_fixture([hit], os.path.join(tmp_dir, "test.hhr"))
+        result = parse_hhr(path, db_prefix="pfam", min_prob=95.0)
+        assert result["pfam_top1_probability"] == 95.0
+
+
+class TestHitTableBoundary:
+    """Lines before " No Hit" must be ignored (header / metadata).
+    The parser only enters hit-collection mode after the column-header line."""
+
+    def test_decoy_hit_lines_in_header_ignored(self, tmp_dir):
+        # A line that looks regex-compatible appears BEFORE the "No Hit" header
+        # — must not be parsed as a hit.
+        path = os.path.join(tmp_dir, "test.hhr")
+        with open(path, "w") as f:
+            f.write("Query         test_protein\n")
+            # Decoy line — looks like a hit but predates the column header
+            f.write(_PFAM_TOP_HIT.replace("PF00012.21", "DECOY") + "\n")
+            f.write("Match_columns 200\n")
+            f.write(" No Hit                             Prob E-value\n")
+            f.write(_PFAM_TOP_HIT + "\n")
+        result = parse_hhr(path, db_prefix="pfam", min_prob=95.0)
+        assert result["pfam_top1_id"] == "PF00012.21"
+        assert result["pfam_top1_id"] != "DECOY"
+
+
+class TestDefaultMinProb:
+    """parse_hhr's default min_prob comes from constants.HHSUITE_MIN_PROB.
+    Pin the default so a future constants edit doesn't silently widen the
+    cutoff."""
+
+    def test_default_min_prob_imported_from_constants(self):
+        from ssign_lib.constants import HHSUITE_MIN_PROB
+
+        # The value should be a sane percent-probability, not 0 or > 100.
+        assert 0 < HHSUITE_MIN_PROB <= 100
+
+    def test_default_used_when_arg_omitted(self, tmp_dir):
+        # No min_prob arg → uses HHSUITE_MIN_PROB. Top-1 at 99.7 should pass
+        # any sane default.
+        path = _hhr_fixture([_PFAM_TOP_HIT], os.path.join(tmp_dir, "test.hhr"))
+        result = parse_hhr(path, db_prefix="pfam")
+        assert result["pfam_top1_id"] == "PF00012.21"

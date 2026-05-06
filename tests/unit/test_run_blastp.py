@@ -1,8 +1,17 @@
-"""Regression + parser tests for run_blastp.py.
+"""Tests for run_blastp.py.
 
-Pins the NCBI " >" stitle-split behaviour: stitle "hemolysin >ID hypothetical
-protein" must reduce to "hemolysin" before the EXCLUDE_TERMS check, otherwise
-real hits get wrongly dropped.
+Two pure-Python surfaces here:
+
+1. `parse_blast_tabular` — outfmt-6 parser. Per-query bitscore re-sort
+   (BLAST's row order is DB-traversal order, not score order, after
+   widening `-max_target_seqs`). NCBI concatenates redundant subject
+   titles with " >"; the split must happen *before* EXCLUDE_TERMS,
+   otherwise a real hit reading "hemolysin >X hypothetical protein"
+   gets wrongly dropped — Critical Bug Fix #3.
+2. `filter_hits` — pident, qcov, and EXCLUDE_TERMS gating.
+
+The `run_local_blastp` subprocess path requires NCBI BLAST+ on PATH and
+is exercised by tests/integration/.
 """
 
 import os
@@ -13,8 +22,13 @@ import pytest
 SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "ssign_app", "scripts"))
 sys.path.insert(0, SCRIPTS_DIR)
 
-from _helpers import make_blast_outfmt_row  # noqa: E402
-from run_blastp import EXCLUDE_TERMS, filter_hits, parse_blast_tabular  # noqa: E402
+from _helpers import BLAST_OUTFMT_COLS, make_blast_outfmt_row  # noqa: E402
+from run_blastp import (  # noqa: E402
+    BLAST_OUTFMT,
+    EXCLUDE_TERMS,
+    filter_hits,
+    parse_blast_tabular,
+)
 
 
 @pytest.mark.parametrize(
@@ -98,3 +112,108 @@ class TestParserResilience:
 def test_every_exclude_term_filters_out(term):
     hits = parse_blast_tabular(make_blast_outfmt_row(stitle=term))
     assert filter_hits(hits, min_pident=0, min_qcov=0) == {}
+
+
+class TestQueryCoverage:
+    """qcov = aln_len / qlen * 100. Defensive on qlen=0."""
+
+    @pytest.mark.parametrize(
+        "aln_len, qlen, expected_qcov",
+        [
+            (200, 200, 100.0),  # full coverage
+            (100, 200, 50.0),
+            (160, 200, 80.0),
+            (50, 200, 25.0),
+        ],
+    )
+    def test_qcov_calculated_from_aln_len_and_qlen(self, aln_len, qlen, expected_qcov):
+        hits = parse_blast_tabular(make_blast_outfmt_row(aln_len=aln_len, qlen=qlen))
+        assert hits["GENE_0001"]["blastp_qcov"] == expected_qcov
+
+    def test_qlen_zero_yields_zero_qcov_not_div_by_zero(self):
+        hits = parse_blast_tabular(make_blast_outfmt_row(aln_len=100, qlen=0))
+        assert hits["GENE_0001"]["blastp_qcov"] == 0
+
+
+class TestFilterThresholds:
+    def test_pident_below_threshold_dropped(self):
+        hits = parse_blast_tabular(make_blast_outfmt_row(pident=70.0))
+        assert filter_hits(hits, min_pident=80, min_qcov=0) == {}
+
+    def test_pident_at_threshold_kept(self):
+        # `>=` comparison — equality passes (pin against accidental flip to `>`).
+        hits = parse_blast_tabular(make_blast_outfmt_row(pident=80.0))
+        assert "GENE_0001" in filter_hits(hits, min_pident=80, min_qcov=0)
+
+    def test_qcov_below_threshold_dropped(self):
+        hits = parse_blast_tabular(make_blast_outfmt_row(aln_len=100, qlen=200))
+        assert filter_hits(hits, min_pident=0, min_qcov=80) == {}
+
+    def test_qcov_at_threshold_kept(self):
+        hits = parse_blast_tabular(make_blast_outfmt_row(aln_len=160, qlen=200))
+        assert "GENE_0001" in filter_hits(hits, min_pident=0, min_qcov=80)
+
+
+class TestMultiQueryIndependence:
+    """Each query keeps its own best hit; queries don't pool."""
+
+    def test_two_queries_get_independent_best_hits(self):
+        rows = "\n".join(
+            [
+                make_blast_outfmt_row(qseqid="Q1", sseqid="Q1_BEST", bitscore=900.0),
+                make_blast_outfmt_row(qseqid="Q1", sseqid="Q1_OTHER", bitscore=200.0),
+                make_blast_outfmt_row(qseqid="Q2", sseqid="Q2_BEST", bitscore=500.0),
+                make_blast_outfmt_row(qseqid="Q2", sseqid="Q2_OTHER", bitscore=100.0),
+            ]
+        )
+        hits = parse_blast_tabular(rows)
+        assert hits["Q1"]["blastp_hit_accession"] == "Q1_BEST"
+        assert hits["Q2"]["blastp_hit_accession"] == "Q2_BEST"
+
+
+class TestEntryFieldsPopulated:
+    """All seven output fields present, with the expected types and rounding."""
+
+    def test_all_fields_present_and_typed(self):
+        hits = parse_blast_tabular(
+            make_blast_outfmt_row(
+                qseqid="Q",
+                sseqid="WP_001",
+                pident=92.347,
+                aln_len=180,
+                qlen=200,
+                evalue=1e-50,
+                bitscore=400.0,
+                stitle="hemolysin",
+            )
+        )
+        e = hits["Q"]
+        assert e["locus_tag"] == "Q"
+        assert e["blastp_hit_accession"] == "WP_001"
+        assert e["blastp_hit_description"] == "hemolysin"
+        # pident rounded to 1 dp
+        assert e["blastp_pident"] == 92.3
+        # qcov = 180/200 * 100 = 90.0 (rounded to 1 dp)
+        assert e["blastp_qcov"] == 90.0
+        assert e["blastp_evalue"] == 1e-50
+        assert e["blastp_bitscore"] == 400.0
+
+
+class TestOutfmtPinning:
+    """The BLAST_OUTFMT string is the contract between the subprocess command
+    and the parser's column indices. If the format ever drifts out of sync
+    with `_helpers.BLAST_OUTFMT_COLS`, every column-index lookup silently
+    returns the wrong field. Pin the alignment."""
+
+    def test_outfmt_column_order_matches_helpers(self):
+        # BLAST_OUTFMT is "6 col1 col2 ... colN"; first token is the format
+        # specifier, rest are columns.
+        cols_in_outfmt = BLAST_OUTFMT.split()
+        assert cols_in_outfmt[0] == "6"
+        assert cols_in_outfmt[1:] == BLAST_OUTFMT_COLS
+
+    def test_outfmt_has_15_columns(self):
+        # _BLAST_MIN_FIELDS = 15 in the parser; column-count drift below 15
+        # silently drops every row.
+        assert len(BLAST_OUTFMT.split()) - 1 == 15
+        assert len(BLAST_OUTFMT_COLS) == 15
