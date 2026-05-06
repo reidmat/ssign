@@ -35,18 +35,19 @@ SS_MAP = {
 
 # Primary mirror: ssign's own Zenodo deposit. URL will be filled in at
 # v1.0.0 release when the checkpoint is uploaded. Until then, the list
-# falls back to the SJTU origin server (known-unreliable).
+# is just the SJTU origin server (known-unreliable) — empty mirrors are
+# filtered out below so we don't make doomed HTTP requests to placeholders.
 #
 # Override at runtime via the SSIGN_DEEPSECE_CHECKPOINT_URL environment
 # variable — useful for institutional mirrors or CI caches.
-CHECKPOINT_URL_ZENODO = "https://zenodo.org/records/PLACEHOLDER/files/deepsece_checkpoint.pt"
+CHECKPOINT_URL_ZENODO = ""  # populated at v1.0.0 release
 CHECKPOINT_URL_SJTU = "https://tool2-mml.sjtu.edu.cn/DeepSecE/checkpoint.pt"
 
 _env_override = os.environ.get("SSIGN_DEEPSECE_CHECKPOINT_URL", "").strip()
 if _env_override:
     CHECKPOINT_URLS = [_env_override]
 else:
-    CHECKPOINT_URLS = [CHECKPOINT_URL_ZENODO, CHECKPOINT_URL_SJTU]
+    CHECKPOINT_URLS = [u for u in (CHECKPOINT_URL_ZENODO, CHECKPOINT_URL_SJTU) if u]
 DEFAULT_CHECKPOINT_DIR = os.path.join(os.path.expanduser("~"), ".ssign", "models")
 DEFAULT_CHECKPOINT = os.path.join(DEFAULT_CHECKPOINT_DIR, "deepsece_checkpoint.pt")
 # Expected checkpoint size: ~2.5 GB (includes ESM-1b weights + classifier).
@@ -164,18 +165,18 @@ def _ensure_checkpoint(checkpoint_path=None):
         "All download attempts failed. Tried: %s",
         ", ".join(CHECKPOINT_URLS),
     )
-    logger.error(
-        "Please download the checkpoint manually and place it at:\n"
-        f"  {path}\n"
-        "\n"
-        "Primary mirror (ssign Zenodo deposit):\n"
-        f'  wget -c --tries=5 --timeout=60 {CHECKPOINT_URL_ZENODO} -O "{path}"\n'
-        "\n"
-        "Fallback (origin, SJTU — unreliable):\n"
+    manual_lines = [f"Please download the checkpoint manually and place it at:\n  {path}\n"]
+    if CHECKPOINT_URL_ZENODO:
+        manual_lines.append(
+            "Primary mirror (ssign Zenodo deposit):\n"
+            f'  wget -c --tries=5 --timeout=60 {CHECKPOINT_URL_ZENODO} -O "{path}"\n'
+        )
+    manual_lines.append(
+        "Origin server (SJTU — unreliable):\n"
         f'  wget -c --tries=5 --timeout=60 {CHECKPOINT_URL_SJTU} -O "{path}"\n'
-        "\n"
-        "Or point SSIGN_DEEPSECE_CHECKPOINT_URL at your own mirror."
+        "\nOr point SSIGN_DEEPSECE_CHECKPOINT_URL at your own mirror."
     )
+    logger.error("\n".join(manual_lines))
     raise RuntimeError(
         f"Could not download DeepSecE checkpoint after "
         f"{DOWNLOAD_MAX_RETRIES} attempts per URL ({len(CHECKPOINT_URLS)} URLs tried).\n"
@@ -184,7 +185,7 @@ def _ensure_checkpoint(checkpoint_path=None):
         f"    - Network/firewall blocking downloads\n"
         f"    - Slow connection causing timeouts (currently {DOWNLOAD_TIMEOUT_SEC}s)\n"
         f"  How to fix:\n"
-        f'    - Download manually with wget: wget -c --tries=5 {CHECKPOINT_URL_ZENODO} -O "{path}"\n'
+        f'    - Download manually with wget: wget -c --tries=5 {CHECKPOINT_URL_SJTU} -O "{path}"\n'
         f"    - Or set SSIGN_DEEPSECE_CHECKPOINT_URL to an institutional mirror\n"
         f"    - Then re-run this script (it will find the cached checkpoint)"
     )

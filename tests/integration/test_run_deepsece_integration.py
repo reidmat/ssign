@@ -3,10 +3,9 @@
 DeepSecE is a single ESM-1b-derived classifier predicting one of
 {T1SE, T2SE, T3SE, T4SE, T6SE, Non-secreted} per input protein. The
 wrapper auto-downloads its checkpoint to ~/.ssign/models/ on first
-run from a Zenodo URL that is currently a `PLACEHOLDER` (v1.0.0
-release blocker — see design_decisions.md). The SJTU origin URL
-(`tool2-mml.sjtu.edu.cn/DeepSecE/checkpoint.pt`) is the working
-fallback at time of writing.
+run. The SJTU origin URL (`tool2-mml.sjtu.edu.cn/DeepSecE/checkpoint.pt`)
+is the active source until the Zenodo mirror is populated at v1.0.0
+release.
 
 Test skips cleanly unless:
   - `deepsece` package is importable (pip install ssign[extended]
@@ -61,9 +60,7 @@ RAW_REQUIRED_COLUMNS = {
 
 
 class TestRunDeepSecE:
-    def test_full_pipeline_on_fixture(
-        self, tmp_dir, t1ss_fixture_proteins
-    ):
+    def test_full_pipeline_on_fixture(self, tmp_dir, t1ss_fixture_proteins):
         """One run, three asserts — DSE on the 9-CDS fixture takes
         ~1-2 min on CPU once ESM-1b is cached; first run is dominated
         by the ESM-1b weight download (~7.5 GB from Meta CDN, 5-15 min).
@@ -91,8 +88,7 @@ class TestRunDeepSecE:
         assert len(raw_rows) > 0
         missing = RAW_REQUIRED_COLUMNS - set(raw_rows[0].keys())
         assert not missing, (
-            f"Raw DSE output missing columns: {missing}. Schema may have "
-            f"drifted in run_deepsece's writer."
+            f"Raw DSE output missing columns: {missing}. Schema may have drifted in run_deepsece's writer."
         )
 
         # Invariant 1: DSE T3SS unreliability — per CLAUDE.md Critical
@@ -101,8 +97,7 @@ class TestRunDeepSecE:
         # rows should be T3SS. Sanity bound at most ~1/3 of input rows.
         t3ss_count = sum(1 for r in raw_rows if r["deepsece_ss_type"] == "T3SS")
         assert t3ss_count <= 3, (
-            f"DSE called {t3ss_count}/{len(raw_rows)} as T3SS — flagellar "
-            f"misclassification regression?"
+            f"DSE called {t3ss_count}/{len(raw_rows)} as T3SS — flagellar misclassification regression?"
         )
 
         # Invariant 2: parse_deepsece_output renames to ssign convention
@@ -113,13 +108,9 @@ class TestRunDeepSecE:
         assert len(parsed) > 0
         ssign_required = {"locus_tag", "dse_ss_type", "dse_max_prob"}
         assert ssign_required <= set(parsed[0].keys()), (
-            f"parse_deepsece_output missing ssign columns: "
-            f"{ssign_required - set(parsed[0].keys())}"
+            f"parse_deepsece_output missing ssign columns: {ssign_required - set(parsed[0].keys())}"
         )
-        target = next(
-            (e for e in parsed if e["locus_tag"] == "BIMENO_04457"), None
-        )
+        target = next((e for e in parsed if e["locus_tag"] == "BIMENO_04457"), None)
         assert target is not None, (
-            "BIMENO_04457 missing from parsed output — wrapper dropped "
-            "it or column-rename map drifted."
+            "BIMENO_04457 missing from parsed output — wrapper dropped it or column-rename map drifted."
         )
