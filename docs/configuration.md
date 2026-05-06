@@ -99,5 +99,6 @@ sbatch --cpus-per-task=16 --mem=64G --time=24:00:00 --wrap='
 '
 ```
 
-For a Singularity-image workflow on HPC (recommended for reproducibility), see
-`docs/how-to/run_on_hpc.md`.
+For a Singularity-image workflow on HPC (recommended for reproducibility),
+see the `containers/` README and the v1.0.0 release notes — a dedicated
+HPC how-to lands as part of the Phase 5 docs overhaul.

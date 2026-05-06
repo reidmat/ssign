@@ -44,7 +44,8 @@ to make runs reproducible offline.
 | EggNOG       | `--eggnog-db /path`                                        | ~50 GB                      |
 | pLM-BLAST    | `--plmblast-ecod-db /path`                                 | ECOD70 ~10 GB               |
 
-See `docs/install.md` for the install-tier table (base / extended / full).
+See `docs/optional_tools.md` for the install-tier table (base / extended / full)
+and per-tool install instructions.
 
 ## Skipping Tools
 
