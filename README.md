@@ -180,32 +180,34 @@ Full platform-specific install guide: [`docs/optional_tools.md`](docs/optional_t
 
 ## Roadmap to v1.0.0
 
-v1.0.0 is the publication release. Planned work:
+v1.0.0 is the publication release. Most pipeline-side work has already
+landed on `main`; remaining items are packaging, documentation, and the
+release itself.
 
-**Pipeline**
+**Pipeline (mostly landed on main)**
 
-- **Fully offline operation** — replaces BioLib (DeepLocPro, SignalP), NCBI
-  remote BLAST, EBI InterProScan, and the MPI Toolkit HHpred service with
-  local binaries and databases.
-- **New tools** — Bakta + EggNOG (whole-genome annotation), PLM-Effector
-  (first-class secreted-protein prediction), pLM-BLAST / ECOD70 (substrate
-  annotation).
-- **Re-annotate by default with Bakta** — uniform annotation across a cohort;
-  opt out via `--use-input-annotations` for curated GenBanks.
-- **Cross-validation rule change** — DLP, DSE, and PLM-Effector treated as
-  equal secretion predictors (any one flagging = candidate). SignalP becomes
-  evidence-only. New `n_prediction_tools_agreeing` column.
-- **Pipeline order** — `enrichment_testing` moves before
-  `filter_by_stats_and_dlp`; stats filter default ON for ≥10 genomes.
+- ✅ Fully offline operation — BioLib (DeepLocPro, SignalP), NCBI remote
+  BLAST, EBI InterProScan, and MPI Toolkit HHpred replaced with local
+  binaries and databases. (DLP and SignalP still have an opt-in remote
+  fallback to the DTU webserver for users without DTU academic licenses.)
+- ✅ Bakta + EggNOG whole-genome annotation, PLM-Effector first-class
+  secretion prediction, pLM-BLAST / ECOD70 substrate annotation.
+- ✅ Re-annotate inputs with Bakta by default; `--use-input-annotations`
+  preserves curated GenBank annotations.
+- ✅ Cross-validation rule: DLP, DSE, and PLM-Effector treated as equal
+  secretion predictors (any one flagging = candidate). SignalP is
+  evidence-only. `n_prediction_tools_agreeing` column carried through.
+- ✅ Pipeline order — `enrichment_testing` runs before substrate
+  filtering; stats filter default ON for ≥10 genomes.
 
-**Packaging and distribution**
+**Packaging and distribution (in flight)**
 
 - **Docker bundle image** — SHA-pinned, reproducible for 5+ years, published
   to Docker Hub / GHCR.
 - **Zenodo deposits** — separate DOIs for source code, model weights, and
   database bundle; paper cites all three.
-- **Tier-aware database fetcher** — `scripts/fetch_databases.sh --tier
-{base,extended,full}` pulling from pinned Zenodo DOIs.
+- ✅ Tier-aware database fetcher — `scripts/fetch_databases.sh --tier
+{base,extended,full}` (Zenodo DOIs land at release time).
 - **FAIR-compliant repository layout** per
   [FAIR4RS](https://doi.org/10.1038/s41597-022-01710-x) (Barker et al. 2022,
   _Scientific Data_).

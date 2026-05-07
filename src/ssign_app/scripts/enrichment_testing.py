@@ -97,12 +97,16 @@ def fishers_exact_enrichment(substrates):
                     "cat_total": cat_totals[cat],
                     "total": total,
                     "odds_ratio": round(odds, 4),
-                    "pvalue": pval,
+                    # 6 dp matches the permutation-test output column so
+                    # cross-test comparisons aren't tripped up by display
+                    # precision.
+                    "pvalue": round(pval, 6),
                 }
             )
 
-    # BH FDR correction
-    results.sort(key=lambda x: x["pvalue"])
+    # BH FDR correction. Tie-break by (ss_type, category) so identical
+    # p-values produce a deterministic row order across Python runs.
+    results.sort(key=lambda x: (x["pvalue"], x["ss_type"], x["category"]))
     n_tests = len(results)
     for rank, r in enumerate(results, 1):
         r["bh_rank"] = rank

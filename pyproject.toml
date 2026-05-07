@@ -92,6 +92,8 @@ extended = [
     # transformers >=5.0 removes batch_encode_plus, breaking pLM-BLAST and
     # PLM-Effector; numpy >=2.0 removes np.issubsctype, breaking pLM-BLAST.
     # Both bounds verified via integration tests on 2026-04-29.
+    # v1.x roadmap: revisit when upstream pLM-BLAST/PLM-Effector ships
+    # transformers-5 + numpy-2 compatible code so we can drop the upper bound.
     "transformers>=4.38,<5.0",
     "numpy>=1.26,<2.0",
     "xgboost>=2.0",
