@@ -200,7 +200,11 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
 
     import numpy as np
 
-    # FRAGILE: torch import requires PyTorch installation (large dependency)
+    # FRAGILE: torch import requires PyTorch installation (large dependency).
+    # Tested against torch 2.0–2.6. The two torch APIs we lean on below are
+    # `torch.serialization.add_safe_globals` (added 2.6) and `torch.load(..., mmap=True)`
+    # (added 2.0). If torch>=3.x removes either, update the guards near
+    # `torch.serialization.add_safe_globals` and `_mmap_torch_load` below.
     # If this breaks: pip install torch (CPU-only: pip install torch --index-url https://download.pytorch.org/whl/cpu)
     try:
         import torch
@@ -239,7 +243,11 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
 
     torch.load = _mmap_torch_load
 
-    # FRAGILE: DeepSecE model import requires the DeepSecE package
+    # FRAGILE: DeepSecE model import requires the DeepSecE package.
+    # Pinned upstream commit (see pyproject.toml). The module path
+    # `DeepSecE.model.EffectorTransformer` is stable on the pinned commit; if a
+    # future upstream rewrite renames the module, re-vendor or update the
+    # import here.
     # If this breaks: pip install DeepSecE
     try:
         from DeepSecE.model import EffectorTransformer
@@ -254,8 +262,11 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
             f"    - Or: pip install git+https://github.com/zhangyumeng1sjtu/DeepSecE.git"
         ) from e
 
-    # FRAGILE: ESM (Evolutionary Scale Modeling) import requires fair-esm package
-    # If this breaks: pip install fair-esm
+    # FRAGILE: ESM (Evolutionary Scale Modeling) import requires fair-esm package.
+    # Tested against fair-esm 2.x. `Alphabet` and `FastaBatchedDataset` live in
+    # the top-level `esm` namespace. fair-esm 3.x or the unified `esm` rewrite
+    # may move these — if so, pin fair-esm<3 in pyproject or update the imports.
+    # If this breaks: pip install 'fair-esm>=2,<3'
     try:
         from esm import Alphabet, FastaBatchedDataset
     except ImportError as e:

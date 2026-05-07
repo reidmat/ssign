@@ -155,7 +155,9 @@ def main():
                     substrates[neighbor_locus] = {
                         "locus_tag": neighbor_locus,
                         "sample_id": args.sample,
-                        "tool": "+".join(tool),
+                        # Kept as a set during the loop so each repeat hit is an
+                        # O(1) update; joined to "+"-string once before CSV write.
+                        "tool": set(tool),
                         "nearby_ss_types": {ss_type},
                         "dlp_extracellular_prob": dlp_ext_prob,
                         "predicted_localization": pred.get("predicted_localization", ""),
@@ -170,10 +172,7 @@ def main():
                     }
                 else:
                     substrates[neighbor_locus]["nearby_ss_types"].add(ss_type)
-                    # Upgrade tool if both detected
-                    existing_tools = set(substrates[neighbor_locus]["tool"].split("+"))
-                    existing_tools.update(tool)
-                    substrates[neighbor_locus]["tool"] = "+".join(sorted(existing_tools))
+                    substrates[neighbor_locus]["tool"].update(tool)
 
     # Check DSE-to-system type match and add flag
     n_type_match = 0
@@ -225,6 +224,7 @@ def main():
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
         writer.writeheader()
         for sub in substrates.values():
+            sub["tool"] = "+".join(sorted(sub["tool"]))
             sub["nearby_ss_types"] = ",".join(sorted(sub["nearby_ss_types"]))
             writer.writerow(sub)
 
