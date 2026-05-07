@@ -1,71 +1,121 @@
-# Output Files
+# Output files
 
-## Directory Structure
+What ssign writes to your `--outdir` after a successful run.
+
+## Single-genome layout
 
 ```
 results/
-├── per_genome/
-│   └── <sample_id>/
-│       ├── proteins.faa            # Extracted protein sequences
-│       ├── gene_info.tsv           # Gene metadata (position, product, etc.)
-│       ├── gene_order.tsv          # Sorted gene order per contig
-│       ├── macsyfinder/            # Raw MacSyFinder output
-│       ├── ss_components.tsv       # Validated SS components
-│       ├── valid_systems.tsv       # Complete systems (wholeness >= threshold)
-│       ├── deeplocpro.tsv          # Subcellular localization predictions
-│       ├── deepsece.tsv            # SS type predictions
-│       ├── signalp.tsv             # Signal peptide predictions (if run)
-│       ├── predictions_validated.tsv  # Cross-validated predictions
-│       ├── proximity_results.tsv   # Proteins near SS components
-│       ├── t5ss_substrates.tsv     # T5SS self-substrates
-│       ├── substrates_filtered.tsv # Final filtered substrate list
-│       ├── substrates_scored.tsv   # Substrates with confidence scores
-│       └── annotations/
-│           ├── blastp.csv          # BLASTp hits (if run)
-│           ├── hhsuite.csv         # HH-suite hits (if run)
-│           ├── interproscan.csv    # InterProScan domains (if run)
-│           ├── protparam.csv       # Physicochemical properties (if run)
-│           └── integrated.csv      # All annotations merged
-├── master_substrates.csv           # Combined substrates across all genomes
-├── master_all_proteins.csv         # All proteins with all annotations
-├── enrichment_results.csv          # Statistical enrichment per SS type
-├── enrichment_summary.txt          # Human-readable enrichment summary
+├── <sample-id>_results.csv          Main results, three chunks (see below)
+├── <sample-id>_results_raw.csv      All annotations, no filtering, no column pruning
+├── <sample-id>_summary.txt          Combined report text + enrichment summary
 ├── figures/
-│   ├── fig1_ss_type_distribution.png
-│   ├── fig2_tool_coverage.png
-│   ├── fig3_protein_lengths.png
-│   └── fig4_physicochemical.png
-├── ssign_report.html               # Interactive HTML report
-└── ssign_report.txt                # Plain text report
+│   └── <sample-id>/
+│       ├── fig_category.png
+│       ├── fig_ss_comp.png
+│       ├── fig_tool_heatmap.png
+│       ├── fig_substrate_count.png
+│       └── fig_func_summary.png
+└── .ssign/
+    └── <sample-id>_progress.json    Resume manifest (used by --resume)
 ```
 
-## Key Output Files
+Per-step intermediate files (proteins.faa, gene_info.tsv, individual tool
+outputs, etc.) are written to a temporary work directory during the run and
+removed on success. On a failure they are kept under `/tmp/ssign_*` and the
+log line points at the location.
 
-### master_substrates.csv
+## Multi-genome layout (GUI batch run)
 
-The primary output — one row per predicted substrate across all genomes.
+When the GUI processes several genomes in one session, the per-genome files
+above are produced for each, and three combined files are added at the
+output-directory root:
 
-| Column                   | Description                                           |
-| ------------------------ | ----------------------------------------------------- |
-| `locus_tag`              | Protein identifier                                    |
-| `sample_id`              | Source genome                                         |
-| `tool`                   | How identified (DLP, DSE, T5SS-self, DLP+DSE)         |
-| `nearby_ss_types`        | Secretion system(s) this substrate is associated with |
-| `dlp_extracellular_prob` | DeepLocPro extracellular probability                  |
-| `dse_ss_type`            | DeepSecE predicted SS type                            |
-| `dse_max_prob`           | DeepSecE confidence                                   |
-| `signalp_prediction`     | Signal peptide type (if SignalP run)                  |
-| `blastp_hit_description` | Best BLASTp hit (if run)                              |
-| `interpro_domains`       | InterPro domain IDs (if run)                          |
-| `pfam_top1_*`            | HHpred Pfam results (if run)                          |
-| `pdb_top1_*`             | HHpred PDB results (if run)                           |
-| `gravy`, `mw_da`, etc.   | Physicochemical properties (if run)                   |
+```
+results/
+├── <each genome's files as above>
+├── ssign_results.csv                Combined results across all genomes
+├── ssign_results_raw.csv            Combined raw annotations
+└── ssign_summary.txt                Combined summary
+```
 
-### substrates_filtered.tsv (per genome)
+## `<sample-id>_results.csv` (main results)
 
-Per-genome substrate list after all filtering:
+Three chunks separated by blank lines, each with a `# Section` header:
 
-- System completeness >= threshold
-- Component localization >= fraction threshold
-- Excluded systems removed
-- DeepSecE cross-genome leakage corrected
+1. **Secreted Proteins** (one row per predicted substrate)
+2. **Secretion Systems (with secreted proteins)** (one row per system or component)
+3. **Other Secretion Systems** (systems detected without high-confidence substrates)
+
+### Chunk 1 column reference (Secreted Proteins)
+
+Columns appear in this order when present; missing columns indicate the
+producing step was skipped or had no output.
+
+| Group | Columns |
+|---|---|
+| Identity | `locus_tag`, `sample_id` |
+| Annotation consensus | `broad_consensus_annotation`, `broad_annotation`, `detailed_annotation`, `detailed_consensus_annotation`, `evidence_keywords`, `n_tools_agreeing`, `n_tools_with_hits`, `concordance_ratio`, `confidence_tier` |
+| Physicochemical | `aa_length`, `gravy`, `mw_da`, `isoelectric_point`, `charge_ph7`, `instability_index`, `aromaticity` |
+| Secretion-system context | `nearby_ss_types`, `secretion_evidence`, `is_secreted` |
+| DeepLocPro | `predicted_localization`, `dlp_extracellular_prob`, `dlp_max_localization`, `dlp_max_probability`, `periplasmic_prob`, `outer_membrane_prob`, `cytoplasmic_prob` |
+| DeepSecE | `dse_ss_type`, `dse_max_prob` |
+| SignalP | `signalp_prediction`, `signalp_probability`, `signalp_cs_position` |
+| Original GenBank | `gbff_annotation` |
+| BLASTp | `blastp_hit_accession`, `blastp_hit_description`, `blastp_pident`, `blastp_qcov`, `blastp_evalue` |
+| HHpred Pfam | `pfam_top1_id`, `pfam_top1_description`, `pfam_top1_probability`, `pfam_top1_evalue`, `pfam_top1_score` |
+| HHpred PDB | `pdb_top1_id`, `pdb_top1_description`, `pdb_top1_probability`, `pdb_top1_evalue`, `pdb_top1_score` |
+| InterProScan | `interpro_domains`, `interpro_go_terms`, `interpro_pfam_ids`, `interpro_descriptions` |
+| Ortholog groups | `ortholog_group`, `og_n_members`, `og_mean_pident` |
+| Tool inventory | `annotation_tools` |
+| Sequence | `sequence` (always last when present) |
+
+Any tool-specific column not listed above (e.g. EggNOG, pLM-BLAST, PLM-Effector
+fields) appears alphabetically after the last priority group, before
+`sequence`.
+
+### Chunk 2 + 3 column reference (Secretion Systems)
+
+Columns mirror MacSyFinder's output table with two added at the front:
+
+| Column | Source |
+|---|---|
+| `record_type` | `system` or `component` (added by ssign for chunked-CSV navigation). |
+| `sample_id` | Genome ID. |
+| `ss_type`, `wholeness_score`, `model_fqn`, `replicon`, `genes` etc. | MacSyFinder columns; see [MacSyFinder docs](https://macsyfinder.readthedocs.io/) for the full list. |
+
+Excluded systems (default: Flagellum, Tad, T3SS) and their components do not
+appear in either chunk.
+
+## `<sample-id>_results_raw.csv` (full annotations)
+
+Every column ssign computed for every protein that reached the integration
+step, with no filtering. Used for further downstream analysis or for
+debugging why a particular protein was or was not called as a substrate.
+
+Same columns as Chunk 1 of `_results.csv` plus any tool-specific columns
+that did not make the priority list (the `_results.csv` priority order is
+purely cosmetic; nothing is dropped from raw).
+
+## `<sample-id>_summary.txt`
+
+Plain text concatenation of:
+
+1. The HTML report's text version (substrate counts, per-SS breakdowns, tool
+   contribution summary).
+2. The enrichment-analysis summary (which functional categories are
+   over-represented near each SS type).
+3. The Fisher's-exact-test results table.
+
+## `figures/<sample-id>/*.png`
+
+Summary figures rendered at `--dpi` (default 300). Toggle individual figures
+with the `--fig-*` flags listed in [`reference/cli.md`](cli.md). These are
+summary-quality; paper-grade figures are regenerated separately from scripts
+in the top-level `figures/` directory.
+
+## `.ssign/<sample-id>_progress.json`
+
+Resume manifest. Records every successful step plus the temp work-dir path,
+so that `--resume` can skip already-completed steps after a partial failure.
+Not meant to be read by the user.
