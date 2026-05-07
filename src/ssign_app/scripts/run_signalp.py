@@ -110,16 +110,13 @@ def run_local_signalp(input_fasta, signalp_path, output_dir):
 
 def run_remote_signalp(input_fasta, output_dir, max_retries=3):
     """Submit to DTU SignalP 6.0 web server with retry on failure."""
-    for attempt in range(1, max_retries + 1):
-        try:
-            return _run_remote_signalp_once(input_fasta, output_dir)
-        except RuntimeError as e:
-            if attempt < max_retries:
-                wait = 30 * attempt
-                logger.warning(f"DTU SignalP attempt {attempt}/{max_retries} failed: {e}. Retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                raise
+    return retry_with_backoff(
+        lambda: _run_remote_signalp_once(input_fasta, output_dir),
+        max_attempts=max_retries,
+        initial_delay=30.0,
+        label="DTU SignalP",
+        retry_on=RuntimeError,
+    )
 
 
 def _run_remote_signalp_once(input_fasta, output_dir):

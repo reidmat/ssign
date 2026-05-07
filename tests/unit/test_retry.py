@@ -18,7 +18,8 @@ import pytest
 SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "ssign_app", "scripts"))
 sys.path.insert(0, SCRIPTS_DIR)
 
-from ssign_lib.retry import retry_once  # noqa: E402
+from ssign_lib import retry as retry_with_backoff_module  # noqa: E402
+from ssign_lib.retry import retry_once, retry_with_backoff  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Success on first attempt
@@ -187,3 +188,108 @@ class TestExceptionTypes:
 
         with pytest.raises(KeyboardInterrupt):
             retry_once(func, "X")
+
+
+# ---------------------------------------------------------------------------
+# retry_with_backoff
+# ---------------------------------------------------------------------------
+
+
+class TestRetryWithBackoff:
+    """retry_with_backoff: N-attempt linear backoff for batch operations.
+
+    Used by DTU SignalP + DLP remote wrappers — replaces the duplicated
+    `for attempt in range(...): ... time.sleep(30 * attempt)` blocks.
+    """
+
+    def test_first_attempt_succeeds_returns_result(self):
+        calls = []
+
+        def func():
+            calls.append(1)
+            return "ok"
+
+        assert retry_with_backoff(func, max_attempts=3, label="t") == "ok"
+        assert len(calls) == 1
+
+    def test_succeeds_on_third_attempt(self, monkeypatch):
+        sleeps: list[float] = []
+        monkeypatch.setattr(retry_with_backoff_module.time, "sleep", lambda s: sleeps.append(s))
+        attempts = {"n": 0}
+
+        def func():
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RuntimeError(f"flaky {attempts['n']}")
+            return "finally"
+
+        assert retry_with_backoff(func, max_attempts=3, initial_delay=10.0) == "finally"
+        # Sleeps: 10s after attempt 1, 20s after attempt 2; nothing after 3.
+        assert sleeps == [10.0, 20.0]
+
+    def test_reraises_after_max_attempts(self, monkeypatch):
+        monkeypatch.setattr(retry_with_backoff_module.time, "sleep", lambda s: None)
+
+        def func():
+            raise RuntimeError("doomed")
+
+        with pytest.raises(RuntimeError, match="doomed"):
+            retry_with_backoff(func, max_attempts=2, initial_delay=1.0)
+
+    def test_only_retries_on_specified_exceptions(self, monkeypatch):
+        # ValueError is NOT in retry_on=RuntimeError → no retry, immediate raise
+        sleeps: list[float] = []
+        monkeypatch.setattr(retry_with_backoff_module.time, "sleep", lambda s: sleeps.append(s))
+
+        def func():
+            raise ValueError("not retryable")
+
+        with pytest.raises(ValueError):
+            retry_with_backoff(func, max_attempts=3, retry_on=RuntimeError)
+        assert sleeps == []
+
+    def test_retry_on_tuple_of_exceptions(self, monkeypatch):
+        monkeypatch.setattr(retry_with_backoff_module.time, "sleep", lambda s: None)
+        attempts = {"n": 0}
+
+        def func():
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise RuntimeError("net")
+            if attempts["n"] == 2:
+                raise OSError("disk")
+            return "ok"
+
+        result = retry_with_backoff(func, max_attempts=3, retry_on=(RuntimeError, OSError))
+        assert result == "ok"
+        assert attempts["n"] == 3
+
+    def test_invalid_max_attempts_rejected(self):
+        with pytest.raises(ValueError, match="max_attempts"):
+            retry_with_backoff(lambda: None, max_attempts=0)
+
+    def test_max_attempts_one_means_no_retry(self):
+        attempts = {"n": 0}
+
+        def func():
+            attempts["n"] += 1
+            raise RuntimeError("nope")
+
+        with pytest.raises(RuntimeError):
+            retry_with_backoff(func, max_attempts=1)
+        assert attempts["n"] == 1
+
+    def test_label_appears_in_warning_log(self, monkeypatch, caplog):
+        monkeypatch.setattr(retry_with_backoff_module.time, "sleep", lambda s: None)
+        attempts = {"n": 0}
+
+        def func():
+            attempts["n"] += 1
+            if attempts["n"] < 2:
+                raise RuntimeError("flaky")
+            return "ok"
+
+        with caplog.at_level(logging.WARNING):
+            retry_with_backoff(func, max_attempts=2, label="DTU SignalP", initial_delay=1.0)
+
+        assert any("DTU SignalP" in rec.message for rec in caplog.records)
