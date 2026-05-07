@@ -99,6 +99,7 @@ class _FakePopen:
         self.kwargs = kwargs
         self.stderr = iter([])
         self.stdout = iter([])
+        self.returncode = 0
 
     def wait(self):
         return 0
@@ -134,15 +135,14 @@ def streamlit_env(monkeypatch, tmp_path):
 
 class TestStreamlitPath:
     def test_streamlit_not_found_exits_1(self, monkeypatch, streamlit_env):
-        # Override Popen with one that raises FileNotFoundError.
+        # main() returns the exit code; setuptools' console-script wrapper
+        # calls sys.exit() on the returned value.
         def _raise(*a, **k):
             raise FileNotFoundError("streamlit")
 
         monkeypatch.setattr(cli.subprocess, "Popen", _raise)
         monkeypatch.setattr(sys, "argv", ["ssign", "--no-browser"])
-        with pytest.raises(SystemExit) as exc:
-            cli.main()
-        assert exc.value.code == 1
+        assert cli.main() == 1
 
     def test_keyboard_interrupt_handled_cleanly(self, monkeypatch, streamlit_env, capsys):
         def _raise(*a, **k):
