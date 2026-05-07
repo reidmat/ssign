@@ -124,6 +124,18 @@ def resolve_organism(organism_name):
         return {"species": None, "genus": None}
 
     organism_name = organism_name.strip()
+
+    # Defensive bounds on the lookup key. Real organism names are short
+    # (≤ ~80 chars including strain qualifiers) and printable. Drop control
+    # characters and clip to 200 chars so a pathological GenBank can't pollute
+    # the cache or cause taxopy to do unbounded work.
+    if len(organism_name) > 200:
+        logger.warning("Truncating overlong organism name (%d chars)", len(organism_name))
+        organism_name = organism_name[:200]
+    organism_name = "".join(c for c in organism_name if c.isprintable())
+    if not organism_name:
+        return {"species": None, "genus": None}
+
     if organism_name in _cache:
         return _cache[organism_name]
 

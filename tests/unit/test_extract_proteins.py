@@ -506,6 +506,36 @@ class TestMainGff3Dispatch:
         assert exc_info.value.code == 1
 
 
+class TestOversizedInputWarning:
+    """An input file >5 GB triggers a WARNING but doesn't fail. Bacterial
+    genomes are typically <100 MB; anything past 5 GB suggests the wrong
+    file (multi-genome dump, compressed archive)."""
+
+    def test_warns_when_input_is_implausibly_large(self, monkeypatch, tmp_dir, caplog):
+        gbff = _write_genbank(
+            os.path.join(tmp_dir, "test.gbff"),
+            "contig_1",
+            [_make_cds(0, 30, 1, {"locus_tag": ["GENE_001"], "translation": ["MKT"]})],
+        )
+        # Forge a giant size by mocking Path.stat() to claim the file is huge.
+        from pathlib import Path
+
+        real_stat = Path.stat
+
+        class _FakeStat:
+            st_size = 10 * 1024 * 1024 * 1024
+
+        def fake_stat(self, *a, **k):
+            if str(self) == gbff:
+                return _FakeStat()
+            return real_stat(self, *a, **k)
+
+        monkeypatch.setattr(Path, "stat", fake_stat)
+        with caplog.at_level("WARNING", logger="ssign_app.scripts.extract_proteins"):
+            _run_main(monkeypatch, tmp_dir, gbff)
+        assert any("unexpectedly large" in rec.message for rec in caplog.records)
+
+
 class TestMainProteinFastaDispatch:
     def test_faa_input_read_directly(self, monkeypatch, tmp_dir):
         faa = os.path.join(tmp_dir, "proteins.faa")

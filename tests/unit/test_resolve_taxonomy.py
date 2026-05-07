@@ -248,6 +248,44 @@ def test_failed_lookup_is_cached_too(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Defensive bounds: length cap + control-character stripping
+# ---------------------------------------------------------------------------
+
+
+def test_overlong_name_is_truncated(monkeypatch, caplog):
+    taxdb = FakeTaxDb()
+    long_name = "X" * 500
+    truncated = long_name[:200]
+    taxdb.name_to_taxids[truncated] = [1]
+    taxdb.taxid_to_meta[1] = {"name": truncated, "rank": "genus"}
+    _install_fake_backend(monkeypatch, taxdb)
+
+    with caplog.at_level("WARNING", logger="ssign_app.scripts.resolve_taxonomy"):
+        result = rt.resolve_organism(long_name)
+    assert any("Truncating overlong organism name" in rec.message for rec in caplog.records)
+    assert result["species"] is None  # genus-rank only — no species set
+    assert result["genus"]["name"] == truncated
+
+
+def test_control_characters_stripped(monkeypatch):
+    taxdb = FakeTaxDb()
+    taxdb.name_to_taxids["Escherichia coli"] = [562]
+    taxdb.taxid_to_meta[562] = {"name": "Escherichia coli", "rank": "species", "genus": 561}
+    taxdb.taxid_to_meta[561] = {"name": "Escherichia", "rank": "genus"}
+    _install_fake_backend(monkeypatch, taxdb)
+
+    # Embed null + bell + tab; all should be stripped before lookup.
+    result = rt.resolve_organism("Escherichia\x00 coli\x07\t")
+    assert result["species"] == {"name": "Escherichia coli", "taxid": "562"}
+
+
+def test_only_control_characters_returns_nones():
+    # If sanitisation leaves an empty string, return early without touching
+    # the taxdump (no _load_taxdb call needed — a pure-code guard).
+    assert rt.resolve_organism("\x00\x01\x02") == {"species": None, "genus": None}
+
+
+# ---------------------------------------------------------------------------
 # SSIGN_TAXDUMP_DIR env var
 # ---------------------------------------------------------------------------
 

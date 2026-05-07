@@ -221,6 +221,22 @@ def main():
     input_path = Path(args.input)
     ext = input_path.suffix.lower()
 
+    # Sanity bound on input size. Bacterial genomes are typically <10 MB
+    # GenBank or <100 MB FASTA — anything past 5 GB suggests the wrong file
+    # was passed (e.g. a multi-genome RefSeq dump or compressed archive).
+    # Continue anyway so the user can override; just make the surprise loud.
+    try:
+        size_bytes = input_path.stat().st_size
+        if size_bytes > 5 * 1024 * 1024 * 1024:
+            logger.warning(
+                "Input %s is %.1f GB — unexpectedly large for a single bacterial "
+                "genome. Continuing, but check whether this is the intended file.",
+                input_path,
+                size_bytes / (1024**3),
+            )
+    except OSError:
+        pass
+
     # Determine parser
     if ext in (".gbff", ".gbk", ".gb"):
         entries = list(extract_from_genbank(args.input, args.sample))
