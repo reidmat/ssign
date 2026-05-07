@@ -28,6 +28,7 @@ _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 from ssign_lib.constants import TOOL_TIMEOUT_S  # noqa: E402
+from ssign_lib.fasta_io import count_sequences  # noqa: E402  # used in run_local + remote paths
 
 # ── Local mode ──
 
@@ -35,8 +36,7 @@ from ssign_lib.constants import TOOL_TIMEOUT_S  # noqa: E402
 def run_local_deeplocpro(input_fasta, deeplocpro_path, output_dir, organism="gram-"):
     """Run DeepLocPro CLI locally and return path to results file."""
     # Handle 0-sequence input gracefully: write empty output and return
-    with open(input_fasta) as _f:
-        n_seqs = sum(1 for line in _f if line.startswith(">"))
+    n_seqs = count_sequences(input_fasta)
     if n_seqs == 0:
         logger.info("0 sequences in input FASTA — writing empty output")
         empty_out = os.path.join(output_dir, "deeplocpro_results.csv")
@@ -242,7 +242,7 @@ def run_remote_deeplocpro(input_fasta, output_dir):
     with open(input_fasta, "rb") as f:
         fasta_content = f.read()
 
-    n_seqs = sum(1 for line in fasta_content.decode().split("\n") if line.startswith(">"))
+    n_seqs = count_sequences(fasta_content)
 
     # Handle 0-sequence input gracefully: write empty output and return
     if n_seqs == 0:
@@ -267,7 +267,7 @@ def run_remote_deeplocpro(input_fasta, output_dir):
     localizations: list[str] = []
 
     for batch_num, batch_bytes in enumerate(batches, 1):
-        batch_n = sum(1 for line in batch_bytes.decode().split("\n") if line.startswith(">"))
+        batch_n = count_sequences(batch_bytes)
         logger.info(f"Batch {batch_num}/{n_batches}: {batch_n} sequences")
 
         try:

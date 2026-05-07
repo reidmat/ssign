@@ -11,7 +11,14 @@ This script parses those headers and produces:
 
 import argparse
 import csv
+import os
 import re
+import sys
+
+_scripts_dir = os.path.dirname(os.path.abspath(__file__))
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+from ssign_lib.fasta_io import write_fasta  # noqa: E402  # used in main()
 
 
 def main():
@@ -75,17 +82,10 @@ def main():
         if current_id:
             sequences[current_id] = "".join(current_seq)
 
-    # Write cleaned FASTA
-    with open(args.out_proteins, "w") as out:
-        for e in entries:
-            seq = sequences.get(str(e["locus_tag"]), "")
-            if not seq:
-                continue
-            # Remove trailing * from Prodigal translations
-            seq = seq.rstrip("*")
-            out.write(f">{e['locus_tag']}\n")
-            for i in range(0, len(seq), 80):
-                out.write(seq[i : i + 80] + "\n")
+    # Write cleaned FASTA. Strip Prodigal's trailing * before write_fasta
+    # which would otherwise emit it; empty seqs are skipped by write_fasta.
+    cleaned = {e["locus_tag"]: sequences.get(str(e["locus_tag"]), "").rstrip("*") for e in entries}
+    write_fasta(cleaned, args.out_proteins)
 
     # Write gene_info TSV
     fieldnames = ["locus_tag", "protein_id", "gene", "product", "contig", "start", "end", "strand"]

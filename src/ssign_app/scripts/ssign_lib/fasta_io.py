@@ -50,6 +50,26 @@ def read_fasta(fasta_path: str | Path) -> dict[str, str]:
     return sequences
 
 
+def count_sequences(source: str | Path | bytes) -> int:
+    """Count records in a FASTA without loading sequences into memory.
+
+    Accepts either a path (read line-by-line) or already-loaded bytes
+    (split-and-count). String paths are treated as paths; pass bytes
+    explicitly when the content is in memory and reading from disk
+    would duplicate it.
+    """
+    if isinstance(source, bytes):
+        # bytes.count is C-implemented and fast; handle the file-starts-
+        # with-> case explicitly so the count matches the line-by-line path.
+        n = source.count(b"\n>")
+        if source.startswith(b">"):
+            n += 1
+        return n
+
+    with open(source) as f:
+        return sum(1 for line in f if line.startswith(">"))
+
+
 def write_fasta(sequences: dict[str, str], output_path: str | Path, line_width: int = 80) -> int:
     """Write a ``{id: sequence}`` dictionary to a FASTA file.
 

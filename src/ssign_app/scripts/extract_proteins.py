@@ -17,12 +17,18 @@ import argparse
 import csv
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
 from Bio import SeqIO
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+_scripts_dir = os.path.dirname(os.path.abspath(__file__))
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+from ssign_lib.fasta_io import write_fasta  # noqa: E402  # used in main()
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -63,7 +69,7 @@ def extract_from_genbank(gbff_path: str, sample_id: str):
             # Location
             start = int(feature.location.start)
             end = int(feature.location.end)
-            strand = '+' if feature.location.strand == 1 else '-'
+            strand = "+" if feature.location.strand == 1 else "-"
 
             yield {
                 "locus_tag": primary_id,
@@ -93,12 +99,12 @@ def extract_from_gff3(gff_path: str, fasta_path: str, sample_id: str):
     # Parse GFF3
     with open(gff_path) as f:
         for line in f:
-            if line.startswith('#'):
+            if line.startswith("#"):
                 continue
-            parts = line.strip().split('\t')
+            parts = line.strip().split("\t")
             if len(parts) < 9:
                 continue
-            if parts[2] != 'CDS':
+            if parts[2] != "CDS":
                 continue
 
             contig = parts[0]
@@ -108,24 +114,24 @@ def extract_from_gff3(gff_path: str, fasta_path: str, sample_id: str):
 
             # Parse attributes
             attrs = {}
-            for attr in parts[8].split(';'):
-                if '=' in attr:
-                    key, val = attr.split('=', 1)
+            for attr in parts[8].split(";"):
+                if "=" in attr:
+                    key, val = attr.split("=", 1)
                     attrs[key] = val
 
-            locus_tag = attrs.get('locus_tag', attrs.get('ID', ''))
-            protein_id = attrs.get('protein_id', '')
-            product = attrs.get('product', 'hypothetical protein')
-            gene = attrs.get('gene', '')
+            locus_tag = attrs.get("locus_tag", attrs.get("ID", ""))
+            protein_id = attrs.get("protein_id", "")
+            product = attrs.get("product", "hypothetical protein")
+            gene = attrs.get("gene", "")
 
             if not locus_tag:
                 continue
 
             # Get or translate sequence
-            translation = attrs.get('translation', '')
+            translation = attrs.get("translation", "")
             if not translation and contig in genome_seqs:
                 nuc_seq = genome_seqs[contig][start:end]
-                if strand == '-':
+                if strand == "-":
                     nuc_seq = str(Seq(nuc_seq).reverse_complement())
                 try:
                     translation = str(Seq(nuc_seq).translate(to_stop=True))
@@ -139,7 +145,7 @@ def extract_from_gff3(gff_path: str, fasta_path: str, sample_id: str):
                 "locus_tag": locus_tag,
                 "protein_id": protein_id,
                 "gene": gene,
-                "product": product.replace('%20', ' ').replace('%2C', ','),
+                "product": product.replace("%20", " ").replace("%2C", ","),
                 "contig": contig,
                 "start": start,
                 "end": end,
@@ -166,12 +172,11 @@ def extract_from_fasta_contigs(fasta_path: str, sample_id: str):
         return
 
     # Train Pyrodigal on input sequences
-    orf_finder = pyrodigal.GeneFinder(meta=len(contigs) > 1 or
-                                       sum(len(s) for _, s in contigs) < 100_000)
+    orf_finder = pyrodigal.GeneFinder(meta=len(contigs) > 1 or sum(len(s) for _, s in contigs) < 100_000)
 
     if not orf_finder.meta:
         # Single-genome mode: train on concatenated sequences
-        training_seq = ''.join(seq for _, seq in contigs)
+        training_seq = "".join(seq for _, seq in contigs)
         orf_finder.train(training_seq.encode())
 
     gene_counter = 0
@@ -182,7 +187,7 @@ def extract_from_fasta_contigs(fasta_path: str, sample_id: str):
             locus_tag = f"{sample_id}_{gene_counter:05d}"
             translation = gene.translate()
             # Remove trailing stop codon asterisk if present
-            if translation and translation[-1] == '*':
+            if translation and translation[-1] == "*":
                 translation = translation[:-1]
             if not translation:
                 continue
@@ -208,49 +213,52 @@ def main():
     parser.add_argument("--out-proteins", required=True, help="Output FASTA path")
     parser.add_argument("--out-gene-info", required=True, help="Output gene info TSV path")
     parser.add_argument("--out-metadata", default="", help="Output metadata JSON (organism, etc.)")
-    parser.add_argument("--original-filename", default="",
-                        help="Original filename (for organism inference when input is a temp file)")
+    parser.add_argument(
+        "--original-filename", default="", help="Original filename (for organism inference when input is a temp file)"
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
     ext = input_path.suffix.lower()
 
     # Determine parser
-    if ext in ('.gbff', '.gbk', '.gb'):
+    if ext in (".gbff", ".gbk", ".gb"):
         entries = list(extract_from_genbank(args.input, args.sample))
-    elif ext in ('.gff', '.gff3', '.gtf'):
+    elif ext in (".gff", ".gff3", ".gtf"):
         if not args.fasta:
             logger.error("GFF3 input requires --fasta argument")
             sys.exit(1)
         entries = list(extract_from_gff3(args.input, args.fasta, args.sample))
-    elif ext in ('.fasta', '.fna', '.fa'):
+    elif ext in (".fasta", ".fna", ".fa"):
         logger.info("FASTA contigs detected — running Pyrodigal gene prediction")
         entries = list(extract_from_fasta_contigs(args.input, args.sample))
-    elif ext == '.faa':
+    elif ext == ".faa":
         # Pre-translated protein FASTA — read directly
         entries = []
         counter = 0
         for record in SeqIO.parse(args.input, "fasta"):
             counter += 1
             locus_tag = record.id or f"{args.sample}_{counter:05d}"
-            entries.append({
-                "locus_tag": locus_tag,
-                "protein_id": "",
-                "gene": "",
-                "product": record.description if record.description != record.id else "hypothetical protein",
-                "contig": "",
-                "start": 0,
-                "end": len(record.seq),
-                "strand": "+",
-                "sequence": str(record.seq),
-            })
+            entries.append(
+                {
+                    "locus_tag": locus_tag,
+                    "protein_id": "",
+                    "gene": "",
+                    "product": record.description if record.description != record.id else "hypothetical protein",
+                    "contig": "",
+                    "start": 0,
+                    "end": len(record.seq),
+                    "strand": "+",
+                    "sequence": str(record.seq),
+                }
+            )
     else:
         logger.error(f"Unsupported format: {ext}")
         sys.exit(1)
 
     # Try to extract organism name from GenBank file
     organism = ""
-    if ext in ('.gbff', '.gbk', '.gb'):
+    if ext in (".gbff", ".gbk", ".gb"):
         try:
             for record in SeqIO.parse(args.input, "genbank"):
                 # Primary: record-level organism annotation
@@ -279,14 +287,11 @@ def main():
         fname = args.original_filename if args.original_filename else str(input_path.name)
         stem = Path(fname).stem
         # Strip common suffixes
-        for suffix in ('_genomic', '_protein', '_cds', '_rna'):
-            stem = stem.replace(suffix, '')
-        parts = stem.replace('_', ' ').split()
+        for suffix in ("_genomic", "_protein", "_cds", "_rna"):
+            stem = stem.replace(suffix, "")
+        parts = stem.replace("_", " ").split()
         # Check if first two parts look like a binomial name (Capitalized + lowercase)
-        if (len(parts) >= 2
-                and parts[0][0].isupper()
-                and parts[1][0].islower()
-                and parts[1].isalpha()):
+        if len(parts) >= 2 and parts[0][0].isupper() and parts[1][0].islower() and parts[1].isalpha():
             inferred = f"{parts[0]} {parts[1]}"
             if not organism:
                 organism = inferred
@@ -307,23 +312,18 @@ def main():
             seen.add(e["locus_tag"])
             unique_entries.append(e)
 
-    logger.info(f"Extracted {len(unique_entries)} CDS from {input_path.name} "
-                f"({len(entries) - len(unique_entries)} duplicates removed)")
+    logger.info(
+        f"Extracted {len(unique_entries)} CDS from {input_path.name} "
+        f"({len(entries) - len(unique_entries)} duplicates removed)"
+    )
 
     # Write FASTA
-    with open(args.out_proteins, 'w') as fasta_out:
-        for e in unique_entries:
-            fasta_out.write(f">{e['locus_tag']}\n")
-            seq = e["sequence"]
-            for i in range(0, len(seq), 80):
-                fasta_out.write(seq[i:i+80] + "\n")
+    write_fasta({e["locus_tag"]: e["sequence"] for e in unique_entries}, args.out_proteins)
 
     # Write gene info TSV
-    fieldnames = ["locus_tag", "protein_id", "gene", "product",
-                  "contig", "start", "end", "strand"]
-    with open(args.out_gene_info, 'w', newline='') as tsv_out:
-        writer = csv.DictWriter(tsv_out, fieldnames=fieldnames, delimiter='\t',
-                                extrasaction='ignore')
+    fieldnames = ["locus_tag", "protein_id", "gene", "product", "contig", "start", "end", "strand"]
+    with open(args.out_gene_info, "w", newline="") as tsv_out:
+        writer = csv.DictWriter(tsv_out, fieldnames=fieldnames, delimiter="\t", extrasaction="ignore")
         writer.writeheader()
         for e in unique_entries:
             writer.writerow(e)
@@ -331,9 +331,9 @@ def main():
     # Write metadata JSON (organism name, etc.)
     if args.out_metadata:
         metadata = {"organism": organism, "n_proteins": len(unique_entries)}
-        with open(args.out_metadata, 'w') as f:
+        with open(args.out_metadata, "w") as f:
             json.dump(metadata, f)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

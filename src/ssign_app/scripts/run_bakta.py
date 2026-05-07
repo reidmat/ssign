@@ -33,6 +33,7 @@ _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 from ssign_lib.constants import TOOL_TIMEOUT_S  # noqa: E402
+from ssign_lib.fasta_io import write_fasta  # noqa: E402  # used in extract_proteins_for_substrates
 
 # Bakta TSV column names (tab-separated, with header)
 # Sequence Id | Type | Start | Stop | Strand | Locus Tag | Gene | Product | DbXrefs
@@ -257,19 +258,9 @@ def write_proteins_fasta(bakta_faa_path, entries, out_fasta):
         if current_tag and current_tag in wanted:
             seqs[current_tag] = "".join(current_seq).rstrip("*")
 
-    n_written = 0
-    with open(out_fasta, "w") as f:
-        for e in entries:
-            tag = e["locus_tag"]
-            seq = seqs.get(tag, "")
-            if not seq:
-                continue
-            f.write(f">{tag}\n")
-            for i in range(0, len(seq), 80):
-                f.write(seq[i : i + 80] + "\n")
-            n_written += 1
-
-    logger.info(f"Wrote {n_written} protein sequences")
+    # write_fasta skips empty sequences (logs a warning per skip).
+    ordered = {e["locus_tag"]: seqs.get(e["locus_tag"], "") for e in entries}
+    n_written = write_fasta(ordered, out_fasta)
     return n_written
 
 

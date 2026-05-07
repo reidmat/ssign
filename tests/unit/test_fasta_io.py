@@ -3,7 +3,11 @@
 import os
 
 import pytest
-from ssign_lib.fasta_io import read_fasta, write_fasta
+from ssign_lib.fasta_io import (  # noqa: F401  # count_sequences used in TestCountSequences
+    count_sequences,
+    read_fasta,
+    write_fasta,
+)
 
 
 class TestReadFasta:
@@ -29,7 +33,7 @@ class TestReadFasta:
 
     def test_empty_file(self, tmp_dir):
         path = os.path.join(tmp_dir, "empty.fasta")
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write("")
         seqs = read_fasta(path)
         assert seqs == {}
@@ -75,3 +79,52 @@ class TestWriteFasta:
         path = os.path.join(tmp_dir, "sub", "dir", "out.fasta")
         write_fasta({"s": "ACGT"}, path)
         assert os.path.exists(path)
+
+
+class TestCountSequences:
+    """count_sequences accepts a path or in-memory bytes and returns the
+    number of `>`-prefixed records. Behaviour must match the legacy
+    hand-rolled `sum(1 for line in ... if line.startswith(">"))` so the
+    six call sites swapped over in B.4 are byte-equivalent."""
+
+    def test_path_with_two_records(self, tmp_dir):
+        path = os.path.join(tmp_dir, "x.fasta")
+        write_fasta({"A": "ACGT", "B": "TGCA"}, path)
+        assert count_sequences(path) == 2
+
+    def test_path_with_zero_records(self, tmp_dir):
+        path = os.path.join(tmp_dir, "empty.fasta")
+        open(path, "w").close()
+        assert count_sequences(path) == 0
+
+    def test_bytes_with_two_records(self):
+        content = b">A\nMKT\n>B\nGGG\n"
+        assert count_sequences(content) == 2
+
+    def test_bytes_starting_with_no_leading_newline(self):
+        # Old: would split-and-count >. New: must include the leading > too.
+        assert count_sequences(b">only\nMKT\n") == 1
+
+    def test_bytes_with_only_sequence_no_header(self):
+        # No `>` anywhere → 0
+        assert count_sequences(b"MKTLLLT\n") == 0
+
+    def test_bytes_empty(self):
+        assert count_sequences(b"") == 0
+
+    def test_path_and_bytes_agree(self, tmp_dir):
+        path = os.path.join(tmp_dir, "x.fasta")
+        write_fasta({"A": "ACGT", "B": "TGCA", "C": "AAA"}, path)
+        with open(path, "rb") as f:
+            content = f.read()
+        assert count_sequences(path) == count_sequences(content) == 3
+
+    def test_does_not_count_internal_gt_in_sequence(self):
+        # `>` only counts when it starts a line. A `>` inside an annotation
+        # column or as part of a description is fine — but our test is
+        # paranoid: hand-rolled sum had this property too.
+        # (Legitimate biological FASTA never has bare > in sequence lines.)
+        # Passing this just to confirm the bytes path doesn't false-positive
+        # on `XYZ>ABC` mid-line.
+        content = b">A\nMKT>frag\n>B\nGGG\n"
+        assert count_sequences(content) == 2

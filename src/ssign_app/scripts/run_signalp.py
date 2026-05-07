@@ -29,6 +29,7 @@ _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 from ssign_lib.constants import TOOL_TIMEOUT_S  # noqa: E402
+from ssign_lib.fasta_io import count_sequences  # noqa: E402
 
 DTU_SUBMIT_URL = "https://services.healthtech.dtu.dk/cgi-bin/webface2.cgi"
 DTU_RESULTS_BASE = "https://services.healthtech.dtu.dk/services/SignalP-6.0/tmp"
@@ -42,8 +43,7 @@ DTU_POLL_INTERVAL = 5
 def run_local_signalp(input_fasta, signalp_path, output_dir):
     """Run SignalP 6.0 CLI locally."""
     # Handle 0-sequence input gracefully: write empty output and return
-    with open(input_fasta) as _f:
-        n_seqs = sum(1 for line in _f if line.startswith(">"))
+    n_seqs = count_sequences(input_fasta)
     if n_seqs == 0:
         logger.info("0 sequences in input FASTA — writing empty output")
         empty_out = os.path.join(output_dir, "signalp_results.tsv")
@@ -132,7 +132,7 @@ def _run_remote_signalp_once(input_fasta, output_dir):
     with open(input_fasta, "rb") as f:
         fasta_content = f.read()
 
-    n_seqs = sum(1 for line in fasta_content.decode().split("\n") if line.startswith(">"))
+    n_seqs = count_sequences(fasta_content)
 
     # Handle 0-sequence input gracefully: write empty output and return
     if n_seqs == 0:
