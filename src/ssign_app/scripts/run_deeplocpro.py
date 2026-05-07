@@ -140,7 +140,12 @@ def _submit_and_poll_dtu(fasta_bytes, batch_num, total_batches, max_retries=3):
 
 
 def _submit_and_poll_dtu_once(fasta_bytes, batch_num, total_batches):
-    """Submit one batch to DTU and poll for results. Returns results dict."""
+    """Submit one batch to DTU and poll for results. Returns results dict.
+
+    Uses one requests.Session for the whole submit/poll/fetch cycle so the
+    ~32 calls per batch share a single TCP+TLS connection. The TLS handshake
+    against DTU is the dominant per-call cost; pooling saves ~5-10s per batch.
+    """
     files = {
         "uploadfile": ("input.fasta", fasta_bytes, "text/plain"),
     }
@@ -151,78 +156,79 @@ def _submit_and_poll_dtu_once(fasta_bytes, batch_num, total_batches):
         "format": "long",
     }
 
-    # FRAGILE: DTU web server submission can fail due to network issues or server maintenance
-    # If this breaks: check https://services.healthtech.dtu.dk status, or use --mode local
-    try:
-        resp = requests.post(DTU_SUBMIT_URL, data=data, files=files, timeout=60)
-    except requests.ConnectionError as e:
-        raise RuntimeError(
-            f"Cannot connect to DTU DeepLocPro server: {e}\n"
-            f"  Common causes:\n"
-            f"    - DTU server is down for maintenance\n"
-            f"    - Network/firewall blocking outbound HTTPS\n"
-            f"  How to fix:\n"
-            f"    - Check https://services.healthtech.dtu.dk manually\n"
-            f"    - Or use --mode local with a DTU academic license"
-        ) from e
-    except requests.Timeout as e:
-        raise RuntimeError(
-            f"DTU DeepLocPro server timed out during submission: {e}\n"
-            f"  Common causes:\n"
-            f"    - Server overloaded or slow\n"
-            f"  How to fix:\n"
-            f"    - Retry later, or use --mode local"
-        ) from e
-    if resp.status_code != 200:
-        raise RuntimeError(f"DTU server returned HTTP {resp.status_code}")
-
-    # FRAGILE: job ID regex parsing depends on DTU response format
-    # If this breaks: DTU may have changed their web interface HTML/redirect format
-    job_match = re.search(r"jobid=([A-F0-9]+)", resp.url)
-    if not job_match:
-        job_match = re.search(r"jobid=([A-F0-9]+)", resp.text)
-    if not job_match:
-        raise RuntimeError(
-            "Could not parse job ID from DTU response.\n"
-            "  Common causes:\n"
-            "    - DTU changed their web interface or redirect format\n"
-            "    - The response HTML no longer contains 'jobid=<HEX>'\n"
-            "  How to fix:\n"
-            "    - Check DTU website manually and report to ssign maintainers\n"
-            "    - Or use --mode local with a DTU academic license"
-        )
-
-    job_id = job_match.group(1)
-    logger.info(f"Batch {batch_num}/{total_batches}: DTU job {job_id}")
-
-    for poll_num in range(DTU_MAX_POLL):
-        time.sleep(DTU_POLL_INTERVAL)
+    with requests.Session() as session:
+        # FRAGILE: DTU web server submission can fail due to network issues or server maintenance
+        # If this breaks: check https://services.healthtech.dtu.dk status, or use --mode local
         try:
-            ajax_resp = requests.get(f"{DTU_SUBMIT_URL}?ajax=1&jobid={job_id}", timeout=15)
-            status_data = ajax_resp.json()
-            status = status_data.get("status", "unknown")
-            runtime = status_data.get("runtime", 0)
+            resp = session.post(DTU_SUBMIT_URL, data=data, files=files, timeout=60)
+        except requests.ConnectionError as e:
+            raise RuntimeError(
+                f"Cannot connect to DTU DeepLocPro server: {e}\n"
+                f"  Common causes:\n"
+                f"    - DTU server is down for maintenance\n"
+                f"    - Network/firewall blocking outbound HTTPS\n"
+                f"  How to fix:\n"
+                f"    - Check https://services.healthtech.dtu.dk manually\n"
+                f"    - Or use --mode local with a DTU academic license"
+            ) from e
+        except requests.Timeout as e:
+            raise RuntimeError(
+                f"DTU DeepLocPro server timed out during submission: {e}\n"
+                f"  Common causes:\n"
+                f"    - Server overloaded or slow\n"
+                f"  How to fix:\n"
+                f"    - Retry later, or use --mode local"
+            ) from e
+        if resp.status_code != 200:
+            raise RuntimeError(f"DTU server returned HTTP {resp.status_code}")
 
-            if status == "finished":
-                logger.info(f"Batch {batch_num}/{total_batches}: completed in {runtime}s")
-                break
-            elif status in ("failed", "error"):
-                raise RuntimeError(f"DTU job failed after {runtime}s (batch {batch_num})")
-            else:
-                if poll_num % 12 == 0 and poll_num > 0:
-                    logger.info(f"Batch {batch_num}/{total_batches}: {status} ({runtime}s)")
-        except requests.RequestException as e:
-            logger.warning(f"Poll error: {e}")
-    else:
-        raise RuntimeError(f"DTU job {job_id} timed out")
+        # FRAGILE: job ID regex parsing depends on DTU response format
+        # If this breaks: DTU may have changed their web interface HTML/redirect format
+        job_match = re.search(r"jobid=([A-F0-9]+)", resp.url)
+        if not job_match:
+            job_match = re.search(r"jobid=([A-F0-9]+)", resp.text)
+        if not job_match:
+            raise RuntimeError(
+                "Could not parse job ID from DTU response.\n"
+                "  Common causes:\n"
+                "    - DTU changed their web interface or redirect format\n"
+                "    - The response HTML no longer contains 'jobid=<HEX>'\n"
+                "  How to fix:\n"
+                "    - Check DTU website manually and report to ssign maintainers\n"
+                "    - Or use --mode local with a DTU academic license"
+            )
 
-    # Fetch results JSON
-    results_url = f"{DTU_RESULTS_BASE}/{job_id}/results.json"
-    results_resp = requests.get(results_url, timeout=30)
-    if results_resp.status_code != 200:
-        raise RuntimeError(f"Could not fetch results: HTTP {results_resp.status_code}")
+        job_id = job_match.group(1)
+        logger.info(f"Batch {batch_num}/{total_batches}: DTU job {job_id}")
 
-    return results_resp.json()
+        for poll_num in range(DTU_MAX_POLL):
+            time.sleep(DTU_POLL_INTERVAL)
+            try:
+                ajax_resp = session.get(f"{DTU_SUBMIT_URL}?ajax=1&jobid={job_id}", timeout=15)
+                status_data = ajax_resp.json()
+                status = status_data.get("status", "unknown")
+                runtime = status_data.get("runtime", 0)
+
+                if status == "finished":
+                    logger.info(f"Batch {batch_num}/{total_batches}: completed in {runtime}s")
+                    break
+                elif status in ("failed", "error"):
+                    raise RuntimeError(f"DTU job failed after {runtime}s (batch {batch_num})")
+                else:
+                    if poll_num % 12 == 0 and poll_num > 0:
+                        logger.info(f"Batch {batch_num}/{total_batches}: {status} ({runtime}s)")
+            except requests.RequestException as e:
+                logger.warning(f"Poll error: {e}")
+        else:
+            raise RuntimeError(f"DTU job {job_id} timed out")
+
+        # Fetch results JSON
+        results_url = f"{DTU_RESULTS_BASE}/{job_id}/results.json"
+        results_resp = session.get(results_url, timeout=30)
+        if results_resp.status_code != 200:
+            raise RuntimeError(f"Could not fetch results: HTTP {results_resp.status_code}")
+
+        return results_resp.json()
 
 
 def run_remote_deeplocpro(input_fasta, output_dir):

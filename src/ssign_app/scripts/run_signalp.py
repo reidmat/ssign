@@ -158,99 +158,103 @@ def _run_remote_signalp_once(input_fasta, output_dir):
         "mode": "fast",
     }
 
-    # FRAGILE: DTU web server submission can fail due to network issues or server maintenance
-    # If this breaks: check https://services.healthtech.dtu.dk status, or use --mode local
-    try:
-        resp = http_requests.post(DTU_SUBMIT_URL, data=data, files=files, timeout=60)
-    except http_requests.ConnectionError as e:
-        raise RuntimeError(
-            f"Cannot connect to DTU SignalP server: {e}\n"
-            f"  Common causes:\n"
-            f"    - DTU server is down for maintenance\n"
-            f"    - Network/firewall blocking outbound HTTPS\n"
-            f"  How to fix:\n"
-            f"    - Check https://services.healthtech.dtu.dk manually\n"
-            f"    - Or use --mode local with a DTU academic license"
-        ) from e
-    except http_requests.Timeout as e:
-        raise RuntimeError(
-            f"DTU SignalP server timed out during submission: {e}\n"
-            f"  Common causes:\n"
-            f"    - Server overloaded or slow\n"
-            f"  How to fix:\n"
-            f"    - Retry later, or use --mode local"
-        ) from e
-
-    if resp.status_code != 200:
-        raise RuntimeError(f"DTU server returned HTTP {resp.status_code}")
-
-    # FRAGILE: job ID regex parsing depends on DTU response redirect format
-    # If this breaks: DTU may have changed their web interface HTML/redirect format
-    job_match = re.search(r"jobid=([A-F0-9]+)", resp.url)
-    if not job_match:
-        job_match = re.search(r"jobid=([A-F0-9]+)", resp.text)
-    if not job_match:
-        raise RuntimeError(
-            "Could not parse job ID from DTU SignalP response.\n"
-            "  Common causes:\n"
-            "    - DTU changed their web interface or redirect format\n"
-            "    - The response HTML no longer contains 'jobid=<HEX>'\n"
-            "  How to fix:\n"
-            "    - Check DTU website manually and report to ssign maintainers\n"
-            "    - Or use --mode local with a DTU academic license"
-        )
-
-    job_id = job_match.group(1)
-    logger.info(f"DTU SignalP job submitted: {job_id}")
-
-    # Poll for completion
-    for poll_num in range(DTU_MAX_POLL):
-        time.sleep(DTU_POLL_INTERVAL)
+    # One Session for the whole submit/poll/download cycle so the dozens of
+    # calls to DTU share a single TCP+TLS connection (saves one handshake
+    # per call, ~5-10s wallclock on a 30-poll cycle).
+    with http_requests.Session() as session:
+        # FRAGILE: DTU web server submission can fail due to network issues or server maintenance
+        # If this breaks: check https://services.healthtech.dtu.dk status, or use --mode local
         try:
-            ajax_resp = http_requests.get(f"{DTU_SUBMIT_URL}?ajax=1&jobid={job_id}", timeout=15)
-            status_data = ajax_resp.json()
-            status = status_data.get("status", "unknown")
-            runtime = status_data.get("runtime", 0)
+            resp = session.post(DTU_SUBMIT_URL, data=data, files=files, timeout=60)
+        except http_requests.ConnectionError as e:
+            raise RuntimeError(
+                f"Cannot connect to DTU SignalP server: {e}\n"
+                f"  Common causes:\n"
+                f"    - DTU server is down for maintenance\n"
+                f"    - Network/firewall blocking outbound HTTPS\n"
+                f"  How to fix:\n"
+                f"    - Check https://services.healthtech.dtu.dk manually\n"
+                f"    - Or use --mode local with a DTU academic license"
+            ) from e
+        except http_requests.Timeout as e:
+            raise RuntimeError(
+                f"DTU SignalP server timed out during submission: {e}\n"
+                f"  Common causes:\n"
+                f"    - Server overloaded or slow\n"
+                f"  How to fix:\n"
+                f"    - Retry later, or use --mode local"
+            ) from e
 
-            if status == "finished":
-                logger.info(f"DTU SignalP job completed in {runtime}s")
-                break
-            elif status in ("failed", "error"):
-                raise RuntimeError(f"DTU SignalP job failed after {runtime}s. Try again later or use local mode.")
-            else:
-                if poll_num % 6 == 0:
-                    logger.info(f"DTU SignalP job {status} (runtime={runtime}s)")
-        except http_requests.RequestException as e:
-            logger.warning(f"Poll error: {e}")
-    else:
-        raise RuntimeError(f"DTU SignalP job {job_id} timed out")
+        if resp.status_code != 200:
+            raise RuntimeError(f"DTU server returned HTTP {resp.status_code}")
 
-    # Try to find output files in the job directory
-    # SignalP output is typically a TSV with predictions
-    job_dir_url = f"{DTU_RESULTS_BASE}/{job_id}/"
-    dir_resp = http_requests.get(job_dir_url, timeout=15)
+        # FRAGILE: job ID regex parsing depends on DTU response redirect format
+        # If this breaks: DTU may have changed their web interface HTML/redirect format
+        job_match = re.search(r"jobid=([A-F0-9]+)", resp.url)
+        if not job_match:
+            job_match = re.search(r"jobid=([A-F0-9]+)", resp.text)
+        if not job_match:
+            raise RuntimeError(
+                "Could not parse job ID from DTU SignalP response.\n"
+                "  Common causes:\n"
+                "    - DTU changed their web interface or redirect format\n"
+                "    - The response HTML no longer contains 'jobid=<HEX>'\n"
+                "  How to fix:\n"
+                "    - Check DTU website manually and report to ssign maintainers\n"
+                "    - Or use --mode local with a DTU academic license"
+            )
 
-    if dir_resp.status_code == 200:
-        # Parse directory listing for output files
-        file_links = re.findall(r'href="([^"]+\.(?:txt|tsv|json|signalp))"', dir_resp.text)
-        for fname in file_links:
-            file_url = f"{DTU_RESULTS_BASE}/{job_id}/{fname}"
-            file_resp = http_requests.get(file_url, timeout=30)
-            if file_resp.status_code == 200:
-                local_path = os.path.join(output_dir, fname)
+        job_id = job_match.group(1)
+        logger.info(f"DTU SignalP job submitted: {job_id}")
+
+        # Poll for completion
+        for poll_num in range(DTU_MAX_POLL):
+            time.sleep(DTU_POLL_INTERVAL)
+            try:
+                ajax_resp = session.get(f"{DTU_SUBMIT_URL}?ajax=1&jobid={job_id}", timeout=15)
+                status_data = ajax_resp.json()
+                status = status_data.get("status", "unknown")
+                runtime = status_data.get("runtime", 0)
+
+                if status == "finished":
+                    logger.info(f"DTU SignalP job completed in {runtime}s")
+                    break
+                elif status in ("failed", "error"):
+                    raise RuntimeError(f"DTU SignalP job failed after {runtime}s. Try again later or use local mode.")
+                else:
+                    if poll_num % 6 == 0:
+                        logger.info(f"DTU SignalP job {status} (runtime={runtime}s)")
+            except http_requests.RequestException as e:
+                logger.warning(f"Poll error: {e}")
+        else:
+            raise RuntimeError(f"DTU SignalP job {job_id} timed out")
+
+        # Try to find output files in the job directory
+        # SignalP output is typically a TSV with predictions
+        job_dir_url = f"{DTU_RESULTS_BASE}/{job_id}/"
+        dir_resp = session.get(job_dir_url, timeout=15)
+
+        if dir_resp.status_code == 200:
+            # Parse directory listing for output files
+            file_links = re.findall(r'href="([^"]+\.(?:txt|tsv|json|signalp))"', dir_resp.text)
+            for fname in file_links:
+                file_url = f"{DTU_RESULTS_BASE}/{job_id}/{fname}"
+                file_resp = session.get(file_url, timeout=30)
+                if file_resp.status_code == 200:
+                    local_path = os.path.join(output_dir, fname)
+                    with open(local_path, "w") as f:
+                        f.write(file_resp.text)
+                    logger.info(f"Downloaded: {fname} ({len(file_resp.text)} bytes)")
+
+        # Also try the prediction_results.txt standard name
+        for candidate in ["prediction_results.txt", "output.txt", f"{job_id}_summary.signalp5"]:
+            candidate_url = f"{DTU_RESULTS_BASE}/{job_id}/{candidate}"
+            resp = session.get(candidate_url, timeout=15)
+            if resp.status_code == 200 and len(resp.text) > 10:
+                local_path = os.path.join(output_dir, candidate)
                 with open(local_path, "w") as f:
-                    f.write(file_resp.text)
-                logger.info(f"Downloaded: {fname} ({len(file_resp.text)} bytes)")
-
-    # Also try the prediction_results.txt standard name
-    for candidate in ["prediction_results.txt", "output.txt", f"{job_id}_summary.signalp5"]:
-        candidate_url = f"{DTU_RESULTS_BASE}/{job_id}/{candidate}"
-        resp = http_requests.get(candidate_url, timeout=15)
-        if resp.status_code == 200 and len(resp.text) > 10:
-            local_path = os.path.join(output_dir, candidate)
-            with open(local_path, "w") as f:
-                f.write(resp.text)
-            logger.info(f"Downloaded: {candidate}")
+                    f.write(resp.text)
+                logger.info(f"Downloaded: {candidate}")
 
     return find_output_file(output_dir)
 
