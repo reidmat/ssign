@@ -7,10 +7,8 @@ behaviour.
 """
 
 import os
-import sys
 
-
-from merge_plm_effector_outputs import (  # noqa: E402, F401
+from merge_plm_effector_outputs import (
     merge_per_type_outputs,
     write_merged_tsv,
 )

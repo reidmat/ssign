@@ -12,13 +12,9 @@ sys.argv monkey-patching, then the output TSV is parsed and asserted on.
 """
 
 import os
-import sys
 
 import pytest
-
-# Production module
-
-from _helpers import (  # noqa: E402
+from _helpers import (
     PREDICTIONS_FIELDS,
     SS_COMPONENT_FIELDS,
     make_prediction_row,
@@ -27,8 +23,8 @@ from _helpers import (  # noqa: E402
     run_script_main,
     write_tsv,
 )
-from proximity_analysis import dse_type_in_genome  # noqa: E402
-from proximity_analysis import main as proximity_main  # noqa: E402
+from proximity_analysis import dse_type_in_genome
+from proximity_analysis import main as proximity_main
 
 # ---------------------------------------------------------------------------
 # dse_type_in_genome — Critical Bug Fix #2

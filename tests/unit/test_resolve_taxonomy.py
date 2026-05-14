@@ -20,9 +20,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-
-
-import resolve_taxonomy as rt  # noqa: E402
+import resolve_taxonomy as rt
 
 # ---------------------------------------------------------------------------
 # Fake taxopy backend

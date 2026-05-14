@@ -6,10 +6,8 @@ the pure-Python parser that reads the tool's TSV output.
 """
 
 import os
-import sys
 
-
-from run_eggnog import (  # noqa: E402, F401
+from run_eggnog import (
     _split_rich_field,
     load_substrate_ids,
     parse_eggnog_annotations,

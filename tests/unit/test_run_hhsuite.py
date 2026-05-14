@@ -8,12 +8,9 @@ the file is missing, empty, or below threshold.
 """
 
 import os
-import sys
 
 import pytest
-
-
-from run_hhsuite import _HHR_HIT_RE, parse_hhr  # noqa: E402
+from run_hhsuite import _HHR_HIT_RE, parse_hhr
 
 _HHR_HEADER = """Query         test_protein
 Match_columns 200

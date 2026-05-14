@@ -16,12 +16,9 @@ tests/integration/test_run_interproscan_integration.py.
 """
 
 import os
-import sys
 
 import pytest
-
-
-from run_interproscan import (  # noqa: E402
+from run_interproscan import (
     _GO_ID_RE,
     _MISSING,
     DEFAULT_IPS_APPLICATIONS,

@@ -26,6 +26,10 @@ import socket
 import subprocess
 import sys
 import threading
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ssign_app.core.runner import PipelineConfig
 
 BANNER = r"""
   ┌─────────────────────────────────────────┐

@@ -19,13 +19,10 @@ Surfaces:
 
 import csv
 import os
-import sys
 
 import pytest
-
-
-from _helpers import write_tsv  # noqa: E402
-from ssign_lib.manifest import Manifest  # noqa: E402
+from _helpers import write_tsv
+from ssign_lib.manifest import Manifest
 
 # ---------------------------------------------------------------------------
 # Construction + column ordering

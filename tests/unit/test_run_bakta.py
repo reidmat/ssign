@@ -6,10 +6,8 @@ that parse Bakta's TSV output and rewrite its FAA into ssign format.
 """
 
 import os
-import sys
 
-
-from run_bakta import parse_bakta_tsv, parse_dbxrefs, write_proteins_fasta  # noqa: E402, F401
+from run_bakta import parse_bakta_tsv, parse_dbxrefs, write_proteins_fasta
 
 # Bakta TSV fixture mirroring the real Bakta 1.12 output format:
 #   - Comment lines starting with "# " (software / DB / DOI / URL).

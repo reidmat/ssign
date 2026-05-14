@@ -6,7 +6,7 @@ categories the pipeline votes over, plus the agreeing-count math,
 concordance ratio, confidence tiers, and evidence-keywords output.
 """
 
-from annotation_consensus import (  # noqa: E402, F401
+from annotation_consensus import (
     CATEGORY_PATTERNS,
     classify_description,
     compute_consensus,

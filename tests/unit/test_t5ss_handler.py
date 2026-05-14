@@ -8,12 +8,9 @@ output marks every T5 component as "T5SS-component".
 """
 
 import os
-import sys
 
 import pytest
-
-
-from _helpers import (  # noqa: E402
+from _helpers import (
     PREDICTIONS_FIELDS,
     SS_COMPONENT_FIELDS,
     make_prediction_row,
@@ -22,7 +19,7 @@ from _helpers import (  # noqa: E402
     run_script_main,
     write_tsv,
 )
-from t5ss_handler import main as t5ss_main  # noqa: E402
+from t5ss_handler import main as t5ss_main
 
 
 def _run_t5ss(monkeypatch, tmp_dir, components, predictions):

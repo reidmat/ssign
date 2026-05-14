@@ -8,13 +8,10 @@ MacSyFinder system).
 """
 
 import os
-import sys
 
 import pytest
-
-
-from _helpers import read_tsv_rows, run_script_main, write_tsv  # noqa: E402
-from system_filtering import main as system_filtering_main  # noqa: E402
+from _helpers import read_tsv_rows, run_script_main, write_tsv
+from system_filtering import main as system_filtering_main
 
 # Substrate-table schema produced by proximity_analysis + t5ss_handler. The
 # script reads whatever columns are present and only relies on:

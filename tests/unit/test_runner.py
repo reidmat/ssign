@@ -30,7 +30,7 @@ from ssign_app.core import runner
 
 # runner.py is the orchestrator under src/ssign_app/core/. Import via the
 # installed package — editable install puts src/ on sys.path.
-from ssign_app.core.runner import (  # noqa: E402
+from ssign_app.core.runner import (
     PipelineConfig,
     PipelineRunner,
     StepResult,

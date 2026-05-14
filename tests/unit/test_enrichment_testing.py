@@ -17,13 +17,10 @@ breaks.
 """
 
 import os
-import sys
 
 import pytest
-
-
-from _helpers import write_tsv  # noqa: E402
-from enrichment_testing import (  # noqa: E402
+from _helpers import write_tsv
+from enrichment_testing import (
     circular_permutation_test,
     fishers_exact_enrichment,
     get_functional_category,

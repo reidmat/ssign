@@ -19,12 +19,9 @@ tests/integration/test_run_signalp_integration.py.
 
 import logging
 import os
-import sys
 
 import pytest
-
-
-from run_signalp import (  # noqa: E402
+from run_signalp import (
     _CS_POS_RE,
     _SIGNALP6_COLS,
     find_output_file,

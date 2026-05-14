@@ -6,10 +6,8 @@ pure-Python helper that parses pLM-BLAST's CSV output.
 """
 
 import os
-import sys
 
-
-from run_plm_blast import (  # noqa: E402, F401
+from run_plm_blast import (
     load_substrate_ids,
     parse_plmblast_csv,
     write_substrates_only_fasta,

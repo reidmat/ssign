@@ -10,14 +10,10 @@ genuinely broken request.
 """
 
 import logging
-import os
-import sys
 
 import pytest
-
-
-from ssign_lib import retry as retry_with_backoff_module  # noqa: E402
-from ssign_lib.retry import retry_once, retry_with_backoff  # noqa: E402
+from ssign_lib import retry as retry_with_backoff_module
+from ssign_lib.retry import retry_once, retry_with_backoff
 
 # ---------------------------------------------------------------------------
 # Success on first attempt

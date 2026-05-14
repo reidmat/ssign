@@ -11,12 +11,10 @@ Two helpers used by every annotation wrapper:
 """
 
 import os
-import sys
 
-
-from _helpers import write_tsv  # noqa: E402
-from ssign_lib.fasta_io import write_fasta  # noqa: E402
-from ssign_lib.substrates import (  # noqa: E402
+from _helpers import write_tsv
+from ssign_lib.fasta_io import write_fasta
+from ssign_lib.substrates import (
     load_substrate_ids,
     write_substrates_only_fasta,
 )

@@ -15,13 +15,10 @@ DTU install and are exercised by tests/integration/test_run_deeplocpro_integrati
 """
 
 import os
-import sys
 
 import pytest
-
-
-from _helpers import write_tsv  # noqa: E402
-from run_deeplocpro import (  # noqa: E402
+from _helpers import write_tsv
+from run_deeplocpro import (
     _split_fasta_bytes,
     find_output_file,
     parse_deeplocpro_output,

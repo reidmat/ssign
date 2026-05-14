@@ -254,3 +254,8 @@ select = ["E", "F", "I", "W"]
 # GitHub URLs to docs which exceed 120 chars. Line-length doesn't carry
 # the same maintenance cost in user-facing prose as in code.
 "src/ssign_app/Home.py" = ["E402", "E501"]
+# conftest.py hoists scripts/ onto sys.path before any test-file imports
+# from it; test_hmmsearch_shim.py does the same for shims/. Both
+# legitimately import after sys.path mutation.
+"tests/unit/conftest.py" = ["E402"]
+"tests/unit/test_hmmsearch_shim.py" = ["E402"]

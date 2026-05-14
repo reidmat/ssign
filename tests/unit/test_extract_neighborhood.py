@@ -9,21 +9,16 @@ tolerance for legacy upstream column names.
 """
 
 import os
-import sys
 
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
-
-
-from _helpers import (  # noqa: E402
+from _helpers import (
     GENE_ORDER_FIELDS,
     SS_COMPONENT_FIELDS,
     make_ss_component_row,
     run_script_main,
     write_tsv,
 )
-from extract_neighborhood import (  # noqa: E402
+from extract_neighborhood import (
     get_neighborhood_proteins,
     load_gene_order,
     load_ss_components,
@@ -31,6 +26,8 @@ from extract_neighborhood import (  # noqa: E402
 from extract_neighborhood import (
     main as neighborhood_main,
 )
+from hypothesis import given
+from hypothesis import strategies as st
 
 # ---------------------------------------------------------------------------
 # get_neighborhood_proteins — window arithmetic

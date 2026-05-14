@@ -25,6 +25,7 @@ import sys
 
 import pytest
 
+# conftest.py hoists scripts/ onto sys.path, not shims/, so this stays inline.
 SHIMS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "ssign_app", "shims"))
 sys.path.insert(0, SHIMS_DIR)
 
@@ -32,17 +33,17 @@ sys.path.insert(0, SHIMS_DIR)
 # so all tests here are conditional on its presence.
 pytest.importorskip("pyhmmer")
 
-import hmmsearch  # noqa: E402
-from hmmsearch import (  # noqa: E402
+import hmmsearch
+from hmmsearch import (
     SHIM_VERSION,
     _decode,
     main,
     parse_args,
 )
-from pyhmmer.easel import Alphabet, TextSequence  # noqa: E402
-from pyhmmer.plan7 import Background, Builder  # noqa: E402
+from pyhmmer.easel import Alphabet, TextSequence
+from pyhmmer.plan7 import Background, Builder
 
-from ssign_app.scripts.ssign_lib.fasta_io import write_fasta  # noqa: E402
+from ssign_app.scripts.ssign_lib.fasta_io import write_fasta
 
 # ---------------------------------------------------------------------------
 # _decode

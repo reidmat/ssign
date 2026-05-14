@@ -8,13 +8,11 @@ missing from the FASTA, swallows per-protein ProtParam exceptions.
 
 import csv
 import os
-import sys
+
+from _helpers import run_script_main, write_tsv
+from compute_protparam import main as protparam_main
 
 from ssign_app.scripts.ssign_lib.fasta_io import write_fasta
-
-
-from _helpers import run_script_main, write_tsv  # noqa: E402
-from compute_protparam import main as protparam_main  # noqa: E402
 
 SUBSTRATE_FIELDS = ["locus_tag"]
 EXPECTED_OUTPUT_FIELDS = [

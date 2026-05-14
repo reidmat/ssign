@@ -16,8 +16,8 @@ ends up with the same annotation as its representative.
 import csv
 import os
 
-from _helpers import write_tsv  # noqa: E402
-from dedup_sequences import (  # noqa: E402
+from _helpers import write_tsv
+from dedup_sequences import (
     deduplicate_dict,
     deduplicate_fasta,
     expand_results_csv,

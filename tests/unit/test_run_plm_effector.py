@@ -7,13 +7,10 @@ tests/integration/test_run_plm_effector_integration.py.
 """
 
 import os
-import sys
 
 import numpy as np
 import pytest
-
-
-from plm_effector.utils import (  # noqa: E402
+from plm_effector.utils import (
     _normalise_sequence,
     read_fasta_for_prediction,
     read_fasta_for_prediction_terminal,

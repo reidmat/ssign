@@ -14,18 +14,16 @@ import os
 import sys
 import tempfile
 
-from hypothesis import given, settings
-from hypothesis import strategies as st
-
-
-from _helpers import (  # noqa: E402
+from _helpers import (
     GENE_INFO_FIELDS,
     GENE_ORDER_FIELDS,
     read_tsv_rows,
     run_script_main,
     write_tsv,
 )
-from extract_gene_order import main as extract_gene_order_main  # noqa: E402
+from extract_gene_order import main as extract_gene_order_main
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 
 def _gene_row(locus_tag, contig, start, end=None, strand="+"):

@@ -14,14 +14,10 @@ The `run_local_blastp` subprocess path requires NCBI BLAST+ on PATH and
 is exercised by tests/integration/.
 """
 
-import os
-import sys
 
 import pytest
-
-
-from _helpers import BLAST_OUTFMT_COLS, make_blast_outfmt_row  # noqa: E402
-from run_blastp import (  # noqa: E402
+from _helpers import BLAST_OUTFMT_COLS, make_blast_outfmt_row
+from run_blastp import (
     BLAST_OUTFMT,
     EXCLUDE_TERMS,
     filter_hits,

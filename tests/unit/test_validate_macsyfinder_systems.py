@@ -10,13 +10,10 @@ Three layers of behaviour:
 """
 
 import os
-import sys
 
 import pytest
-
-
-from _helpers import read_tsv_rows, run_script_main  # noqa: E402
-from validate_macsyfinder_systems import (  # noqa: E402
+from _helpers import read_tsv_rows, run_script_main
+from validate_macsyfinder_systems import (
     main as validate_main,
 )
 from validate_macsyfinder_systems import (

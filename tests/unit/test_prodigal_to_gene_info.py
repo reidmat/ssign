@@ -14,12 +14,10 @@ import os
 import sys
 import tempfile
 
+from _helpers import read_tsv_rows, run_script_main
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
-
-from _helpers import read_tsv_rows, run_script_main  # noqa: E402
-from prodigal_to_gene_info import main as prodigal_main  # noqa: E402
+from prodigal_to_gene_info import main as prodigal_main
 
 
 def _write_prodigal_fasta(path, entries):

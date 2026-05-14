@@ -13,15 +13,11 @@ checkpoint and is exercised by tests/integration/test_run_deepsece_integration.p
 """
 
 import os
-import sys
 
 import pytest
-
-# Production module
-
-import run_deepsece as rd  # noqa: E402
-from _helpers import DSE_RAW_FIELDS, make_dse_raw_row, write_tsv  # noqa: E402
-from run_deepsece import (  # noqa: E402
+import run_deepsece as rd
+from _helpers import DSE_RAW_FIELDS, make_dse_raw_row, write_tsv
+from run_deepsece import (
     MIN_CHECKPOINT_BYTES,
     PREDICTED_LABELS,
     SS_MAP,

@@ -8,17 +8,14 @@ GBFF annotations from voting in the consensus.
 """
 
 import os
-import sys
 
 import pandas as pd
-
-
-from _helpers import run_script_main, write_tsv  # noqa: E402
-from integrate_annotations import (  # noqa: E402
+from _helpers import run_script_main, write_tsv
+from integrate_annotations import (
     TOOL_HIT_COLUMNS,
     _compute_consensus,
 )
-from integrate_annotations import main as integrate_main  # noqa: E402
+from integrate_annotations import main as integrate_main
 
 SUBSTRATE_FIELDS = [
     "locus_tag",

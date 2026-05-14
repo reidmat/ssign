@@ -6,10 +6,8 @@ for annotation-consensus voting.
 """
 
 import os
-import sys
 
-
-from map_gbff_to_bakta_cds import (  # noqa: E402, F401
+from map_gbff_to_bakta_cds import (
     _read_gene_info,
     _reciprocal_overlap,
     best_gbff_match,

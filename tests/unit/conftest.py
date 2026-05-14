@@ -25,8 +25,8 @@ _SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-import pytest  # noqa: E402
-from _helpers import (  # noqa: E402
+import pytest
+from _helpers import (
     GENE_INFO_FIELDS,
     GENE_ORDER_FIELDS,
     SS_COMPONENT_FIELDS,
@@ -35,7 +35,7 @@ from _helpers import (  # noqa: E402
     write_tsv,
 )
 
-from ssign_app.scripts.ssign_lib.fasta_io import write_fasta  # noqa: E402
+from ssign_app.scripts.ssign_lib.fasta_io import write_fasta
 
 
 @pytest.fixture

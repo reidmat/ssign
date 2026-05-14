@@ -8,12 +8,9 @@ layer; .faa is the only protein-FASTA signal).
 """
 
 import os
-import sys
 
 import pytest
-
-
-from detect_input_format import detect_format  # noqa: E402
+from detect_input_format import detect_format
 
 
 def _write(path, content):

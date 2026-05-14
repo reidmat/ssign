@@ -14,17 +14,14 @@ chain, and the dedup/FASTA-write steps.
 
 import json
 import os
-import sys
 
 import pytest
+from _helpers import read_tsv_rows, run_script_main
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
-
-
-from _helpers import read_tsv_rows, run_script_main  # noqa: E402
-from extract_proteins import (  # noqa: E402
+from extract_proteins import (
     extract_from_genbank,
     extract_from_gff3,
 )

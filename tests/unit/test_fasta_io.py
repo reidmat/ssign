@@ -3,7 +3,7 @@
 import os
 
 import pytest
-from ssign_lib.fasta_io import (  # noqa: F401  # all four used in dedicated test classes below
+from ssign_lib.fasta_io import (  # all four used in dedicated test classes below
     count_sequences,
     read_fasta,
     read_fasta_records,

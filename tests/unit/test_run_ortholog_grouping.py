@@ -24,17 +24,15 @@ import subprocess
 import sys
 
 import pytest
-
-
-import run_ortholog_grouping  # noqa: E402
-from run_ortholog_grouping import (  # noqa: E402
+import run_ortholog_grouping
+from run_ortholog_grouping import (
     BlastpUnavailableError,
     _find_blast_binary,
     cluster_union_find,
     compute_group_stats,
 )
 
-from ssign_app.scripts.ssign_lib.fasta_io import write_fasta  # noqa: E402
+from ssign_app.scripts.ssign_lib.fasta_io import write_fasta
 
 # ---------------------------------------------------------------------------
 # cluster_union_find

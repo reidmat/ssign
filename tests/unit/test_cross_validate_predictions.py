@@ -7,13 +7,9 @@ evidence-only rule, the DSE T3SS flagging guard, and the
 `n_prediction_tools_agreeing` count.
 """
 
-import os
-import sys
 
 import pytest
-
-
-from cross_validate_predictions import cross_validate  # noqa: E402, F401
+from cross_validate_predictions import cross_validate
 
 
 def _dlp_row(locus, ext_prob, om_prob=0.0):

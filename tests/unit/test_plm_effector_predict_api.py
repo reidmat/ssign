@@ -18,11 +18,10 @@ from types import SimpleNamespace
 
 import pytest
 
-
 # predict_api imports torch lazily — this module-level import is fine
 # without torch installed. Tests that exercise _resolve_device or the
 # full orchestration mark themselves needs_torch below.
-from plm_effector.predict_api import (  # noqa: E402
+from plm_effector.predict_api import (
     _VALID_EFFECTOR_TYPES,
     _resolve_device,
     predict,

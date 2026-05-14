@@ -16,8 +16,6 @@ OBO download + `goatools.mapslim` paths require network and large data
 files; covered by `tests/integration/`.
 """
 
-import os
-import sys
 
 import pytest
 
@@ -27,8 +25,8 @@ pytest.importorskip("obonet")
 pytest.importorskip("goatools")
 
 
-import networkx  # noqa: E402
-from ssign_lib.go_utils import (  # noqa: E402
+import networkx
+from ssign_lib.go_utils import (
     BROAD_CATEGORY_MAP,
     FALLBACK_KEYWORDS,
     _keyword_fallback,
