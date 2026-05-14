@@ -29,9 +29,13 @@ _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 from ssign_lib.constants import (  # noqa: E402
+    DTU_API_DOWNLOAD_TIMEOUT_S,
+    DTU_API_STATUS_TIMEOUT_S,
+    DTU_API_SUBMIT_TIMEOUT_S,
     TOOL_TIMEOUT_S,
 )
 from ssign_lib.fasta_io import count_sequences  # noqa: E402
+from ssign_lib.retry import retry_with_backoff  # noqa: E402
 
 DTU_SUBMIT_URL = "https://services.healthtech.dtu.dk/cgi-bin/webface2.cgi"
 DTU_RESULTS_BASE = "https://services.healthtech.dtu.dk/services/SignalP-6.0/tmp"

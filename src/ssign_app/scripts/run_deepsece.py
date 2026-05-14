@@ -363,10 +363,10 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
 
     # Run inference
     logger.info(f"Running predictions on {len(dataset)} proteins...")
-    all_names = []
-    all_probs = []
-    all_preds = []
-    all_lengths = []
+    all_names: list[str] = []
+    prob_batches: list[np.ndarray] = []
+    pred_batches: list[np.ndarray] = []
+    all_lengths: list[int] = []
 
     with torch.no_grad():
         for batch_idx, (labels, strs, toks) in enumerate(loader):
@@ -375,8 +375,8 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
             prob = torch.softmax(out, dim=1)
             _, pred = torch.max(prob, 1)
 
-            all_probs.append(prob.cpu().numpy())
-            all_preds.append(pred.cpu().numpy())
+            prob_batches.append(prob.cpu().numpy())
+            pred_batches.append(pred.cpu().numpy())
 
             for i, s in enumerate(strs):
                 name = labels[i].split()[0]
@@ -386,8 +386,8 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
             if (batch_idx + 1) % 100 == 0:
                 logger.info(f"  Processed {batch_idx + 1} batches...")
 
-    all_probs = np.concatenate(all_probs)
-    all_preds = np.concatenate(all_preds)
+    all_probs = np.concatenate(prob_batches)
+    all_preds = np.concatenate(pred_batches)
 
     # Write output CSV
     os.makedirs(output_dir, exist_ok=True)
