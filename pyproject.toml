@@ -62,18 +62,19 @@ dependencies = [
     "jinja2>=3.0",
     "networkx>=3.0",
     "taxopy>=0.12",
-]
-
-[project.optional-dependencies]
-# Individual tool extras (pip install ssign[deepsece], etc.)
-# v1.0.0 will promote deepsece + bakta into base deps per the install-tier
-# decision (base tier = prediction + Bakta light). For now they remain
-# optional to avoid breaking v0.9.0 workflows.
-deepsece = [
+    # DeepSecE prediction is part of the base tier as of v1.0.0 — its
+    # call complements DLP / SignalP on cross-validated secretion calls.
+    # PyTorch and fair-esm together add ~3 GB to the install footprint.
     "deepsece",
     "fair-esm>=2.0",
     "torch>=2.0",
 ]
+
+[project.optional-dependencies]
+# Individual tool extras (pip install ssign[bakta], etc.).
+# DeepSecE moved into base in v1.0.0; [deepsece] is kept as a no-op alias
+# so existing `pip install ssign[deepsece]` invocations keep working.
+deepsece = []
 bakta = [
     "bakta>=1.10",
 ]

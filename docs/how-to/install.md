@@ -123,6 +123,47 @@ ssign auto-detects `blastp` on the next launch.
 
 ---
 
+## InterProScan
+
+InterProScan (EBI) scans proteins against a panel of member databases
+(Pfam, TIGRFAM, HAMAP, SMART, PIRSF, SUPERFAMILY, Gene3D, ProSite, CDD)
+to annotate domains, family memberships, and GO terms. ssign uses it to
+add domain-level annotation to substrate proteins. Java required.
+
+The bundle is large (~24 GB extracted) but installs as a single tarball:
+
+```bash
+# 1. Java 11+ on PATH (Ubuntu / Debian):
+sudo apt install openjdk-17-jre-headless
+
+# 2. Download the latest InterProScan release (replace 5.74-105.0 with
+#    the current version listed at https://www.ebi.ac.uk/interpro/download/):
+mkdir -p ~/interproscan && cd ~/interproscan
+wget https://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/5.74-105.0/interproscan-5.74-105.0-64-bit.tar.gz
+tar -xzf interproscan-5.74-105.0-64-bit.tar.gz
+cd interproscan-5.74-105.0
+
+# 3. Initialise HMMs + indexes (writes ~1 GB of derived files):
+python3 setup.py interproscan.properties
+```
+
+Point ssign at the install directory (the one containing
+`interproscan.sh`):
+
+```bash
+export SSIGN_INTERPROSCAN_PATH=~/interproscan/interproscan-5.74-105.0
+# or pass --interproscan-db ~/interproscan/interproscan-5.74-105.0
+```
+
+ssign runs InterProScan with the bacterial-relevant member DBs by default
+(PANTHER, the slowest member and eukaryote-leaning, is excluded). Per-
+protein scan time is typically 5-30 s; a whole-genome run on ~5,000
+proteins is 30-90 minutes. The first run also queries EBI's precalculated-
+match lookup service for a 5-10x speedup on known sequences; add `-dp`
+behaviour via your own wrapper script if you need air-gapped operation.
+
+---
+
 ## HH-suite (system binary + databases)
 
 `hhsearch` and `hhblits` (Steinegger / Söding labs) detect remote evolutionary

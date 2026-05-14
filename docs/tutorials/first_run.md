@@ -14,6 +14,8 @@ About 30 minutes, mostly waiting for DTU's webserver.
 - Python 3.10 or newer (`python3 --version`)
 - An internet connection (this tutorial uses the DTU webserver fallback for
   DeepLocPro and SignalP, so no DTU licence is required on your part)
+- ~10 GB of free disk: ~3 GB for the install (PyTorch + ESM) and ~7 GB
+  downloaded on first DeepSecE run for the cached ESM-1b language model
 
 No GPU, no DTU licence, no system packages required. For a fully offline
 run with local DTU tools (the canonical ssign mode), see
@@ -28,8 +30,8 @@ pip install ssign
 ssign --version
 ```
 
-The last line should print something like `ssign 1.0.0`. If you see
-`command not found`, your venv is not active; rerun the `source` line.
+The last line prints the installed version (e.g. `ssign 0.9.0`). If you
+see `command not found`, your venv is not active; rerun the `source` line.
 
 ## 2. Download E. coli K-12
 
@@ -77,12 +79,13 @@ What that command says, in plain English:
 - Use the DTU webserver fallback for SignalP and DeepLocPro, so we don't
   need a DTU academic licence for this first run.
 - Skip the five annotation tools that need extra databases. Everything
-  else (DeepLocPro, SignalP, PLM-Effector predictions, MacSyFinder
-  detection, proximity analysis, ProtParam, reporting) runs as normal.
+  else (DeepLocPro, SignalP, DeepSecE predictions, MacSyFinder detection,
+  proximity analysis, ProtParam, reporting) runs as normal.
 
 ssign will print step-by-step progress with percentages. The two slowest
 steps are DeepLocPro and SignalP, both submitted to DTU's webserver and
-queued behind other users (a few minutes each, usually).
+queued behind other users (a few minutes each, usually). DeepSecE runs
+locally; on a CPU it takes a few minutes for a typical genome.
 
 ## 4. Look at the output
 
@@ -99,11 +102,14 @@ ecoli_results/
     └── ecoli_k12_progress.json Resume manifest
 ```
 
-Open `ecoli_k12_results.csv` in a spreadsheet or pandas:
+Open `ecoli_k12_results.csv` in a spreadsheet, or use the flat
+`ecoli_k12_results_raw.csv` from pandas (the chunked CSV interleaves
+sections with different column sets, so a plain `read_csv` doesn't
+work):
 
 ```python
 import pandas as pd
-df = pd.read_csv("ecoli_results/ecoli_k12_results.csv", skiprows=1, comment="#")
+df = pd.read_csv("ecoli_results/ecoli_k12_results_raw.csv")
 print(df[["locus_tag", "predicted_localization", "nearby_ss_types", "gbff_annotation"]].head(20))
 ```
 
@@ -144,7 +150,7 @@ substrate count, per-SS breakdown, and the enrichment-test results.
 ## 5. What to try next
 
 - **Add an annotation tool.** Re-run with `--skip-interproscan` removed
-  (after [installing InterProScan](../how-to/install.md#interproscan-optional))
+  (after [installing InterProScan](../how-to/install.md#interproscan))
   and you get InterPro domain calls in the substrate rows.
 - **Run a different organism.** The same command works on any Gram-negative
   GenBank or FASTA. *Pseudomonas aeruginosa* PAO1 (GCF_000006765.1) and
