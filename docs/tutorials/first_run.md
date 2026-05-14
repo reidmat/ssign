@@ -107,13 +107,14 @@ df = pd.read_csv("ecoli_results/ecoli_k12_results.csv", skiprows=1, comment="#")
 print(df[["locus_tag", "predicted_localization", "nearby_ss_types", "gbff_annotation"]].head(20))
 ```
 
-The CSV is organised in three blocks separated by `# Section` headers:
+The CSV is organised in up to three chunks, each prefixed with a `#`
+header. Empty chunks are omitted:
 
-1. **Secreted Proteins**: one row per predicted substrate, with annotation
-   columns from every tool that ran.
-2. **Secretion Systems (with secreted proteins)**: the SS instances whose
-   neighbourhoods contained at least one secreted protein.
-3. **Other Secretion Systems**: SS instances detected but without
+1. `# Secreted Proteins` — one row per predicted substrate, with
+   annotation columns from every tool that ran.
+2. `# Secretion Systems (with secreted proteins)` — the SS instances
+   whose neighbourhoods contained at least one secreted protein.
+3. `# Secretion Systems (other)` — SS instances detected but without
    high-confidence substrates.
 
 For column-by-column meaning, see [`reference/output_files.md`](../reference/output_files.md).
@@ -123,10 +124,16 @@ For column-by-column meaning, see [`reference/output_files.md`](../reference/out
 K-12 has well-described secretion machinery you can use to gut-check the
 output:
 
-- **Type 2 secretion (T2SS):** the *gsp* operon. ssign should detect a
-  T2SS in section 2 of the CSV.
-- **Type 6 secretion (T6SS):** the H-NS-suppressed *evf* / *vas* loci.
-  ssign should detect a T6SS in section 2 or 3.
+- **Type 2 secretion (T2SS):** the *gsp* operon. ssign detects a complete
+  T2SS in the secretion-systems chunk, with the *gspC–gspM* + *gspO*
+  components and at least one substrate (chitinase ChiA / b3338).
+- **Type 5a secretion (T5aSS):** the canonical *E. coli* autotransporters
+  — adhesin Ag43 (*flu* / b2000), YfaL, YpjA, YcgV, YhjY. ssign reports
+  these as both detected systems and their own substrates ("T5SS-self").
+- **Type 6 secretion (T6SS)** is *not* detected at default settings — the
+  K-12 MG1655 T6SS operon is H-NS-suppressed and degenerate, so it falls
+  below MacSyFinder's wholeness threshold. Lowering
+  `--wholeness-threshold 0.5` will surface it as an incomplete system.
 - **Flagella** are excluded by default (they are not a substrate-export
   system in the relevant sense). You will not see them in the chunked
   CSV. They are still listed in the raw CSV.

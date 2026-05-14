@@ -87,31 +87,19 @@ for f in "${EXPECTED[@]}"; do
 done
 echo "   all expected outputs present + non-empty"
 
-# ── Spot-check: T2SS should appear in section 2 of the chunked CSV ──────
+# ── Spot-check: T2SS gsp operon must appear in the K-12 results ─────────
 echo ">> Spot-checking K-12 biology..."
-python3 - "$OUTDIR/ecoli_k12_results.csv" <<'PY'
-import sys
-import pandas as pd
-
-path = sys.argv[1]
-with open(path) as fh:
-    raw = fh.read()
-
-# Section 2 is between "# Section 2:" and "# Section 3:"; chunked CSV
-# uses these markers as separators (output_files.md § Layout).
-if "# Section 2" not in raw:
-    sys.exit("FAIL: no Section 2 header in chunked CSV")
-
-# Read the whole CSV and find rows whose ss_type column contains T2SS.
-df = pd.read_csv(path, comment="#", skip_blank_lines=True)
-if "ss_type" not in df.columns:
-    sys.exit(f"FAIL: ss_type column missing. Columns: {list(df.columns)}")
-t2ss_rows = df[df["ss_type"].astype(str).str.contains("T2SS", na=False)]
-if t2ss_rows.empty:
-    sys.exit("FAIL: no T2SS rows in K-12 results — gsp operon not detected?")
-
-print(f"   T2SS rows found: {len(t2ss_rows)}")
-PY
+RESULTS="$OUTDIR/ecoli_k12_results.csv"
+if ! grep -q "^# Secretion Systems (with secreted proteins)" "$RESULTS"; then
+    echo "FAIL: no '# Secretion Systems (with secreted proteins)' chunk header in $RESULTS" >&2
+    exit 1
+fi
+T2SS_COUNT=$(grep -c -E ",T2SS,|T2SS_gsp" "$RESULTS" || true)
+if (( T2SS_COUNT == 0 )); then
+    echo "FAIL: no T2SS rows in K-12 results — gsp operon not detected?" >&2
+    exit 1
+fi
+echo "   T2SS rows found: $T2SS_COUNT"
 
 echo
 echo "=========================================="

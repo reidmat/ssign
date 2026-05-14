@@ -41,11 +41,16 @@ results/
 
 ## `<sample-id>_results.csv` (main results)
 
-Three chunks separated by blank lines, each with a `# Section` header:
+Up to three chunks separated by blank lines, each with a `#`-prefixed
+header. Empty chunks are omitted (e.g. genomes with no "other" systems
+will not have a chunk 3):
 
-1. **Secreted Proteins** (one row per predicted substrate)
-2. **Secretion Systems (with secreted proteins)** (one row per system or component)
-3. **Other Secretion Systems** (systems detected without high-confidence substrates)
+1. `# Secreted Proteins` — one row per predicted substrate.
+2. `# Secretion Systems (with secreted proteins)` — one row per system or
+   component, for systems whose neighbourhoods contained at least one
+   substrate.
+3. `# Secretion Systems (other)` — systems detected without high-confidence
+   substrates.
 
 ### Chunk 1 column reference (Secreted Proteins)
 
