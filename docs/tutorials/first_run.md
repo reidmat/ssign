@@ -1,4 +1,4 @@
-# Your first ssign run: E. coli K-12
+# Example first run
 
 A walkthrough that takes you from a fresh machine to a results table. We
 use *Escherichia coli* K-12 substrain MG1655 because it is the canonical
