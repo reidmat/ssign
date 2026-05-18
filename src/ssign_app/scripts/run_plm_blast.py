@@ -94,6 +94,24 @@ def _resolve_plmblast_script() -> str:
     return "plmblast.py"
 
 
+def _use_cuda_for_embedding() -> bool:
+    """Whether to pass `--cuda` to pLM-BLAST's `embeddings.py`.
+
+    Auto-detects CUDA via torch, falling back to CPU if torch is missing
+    or no GPU is visible. `SSIGN_PLMBLAST_FORCE_CPU=1|true|yes` overrides
+    to CPU. Without `--cuda`, ProtT5 embedding runs ~100x slower than on
+    GPU — silently — so the flag is worth getting right.
+    """
+    if os.environ.get("SSIGN_PLMBLAST_FORCE_CPU", "").lower() in ("1", "true", "yes"):
+        return False
+    try:
+        import torch
+
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
 def _resolve_embeddings_script(plmblast_script: str) -> str:
     """Locate pLM-BLAST's `embeddings.py` (one level above `scripts/plmblast.py`)."""
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(plmblast_script)))
@@ -144,6 +162,12 @@ def _embed_query_fasta(
         "-embedder",
         embedder,
     ]
+    use_cuda = _use_cuda_for_embedding()
+    if use_cuda:
+        cmd.append("--cuda")
+        logger.info("pLM-BLAST embedding: CUDA detected, passing --cuda to embeddings.py")
+    else:
+        logger.info("pLM-BLAST embedding: running on CPU (~100x slower than GPU)")
     logger.info(f"Embedding query: embeddings.py start {proteins_fasta} {pt_path} -embedder {embedder}")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=TOOL_TIMEOUT_S)
@@ -155,11 +179,19 @@ def _embed_query_fasta(
             f"    - Or clone the repo and set SSIGN_PLMBLAST_SCRIPT to its scripts/plmblast.py"
         ) from e
     except subprocess.TimeoutExpired as e:
+        if use_cuda:
+            gpu_hint = (
+                "    - Embedding ran on GPU but still timed out — check VRAM is "
+                "sufficient for the batch size and reduce query size if needed"
+            )
+        else:
+            gpu_hint = (
+                "    - GPU not detected — install CUDA-enabled torch and verify "
+                "with `python -c 'import torch; print(torch.cuda.is_available())'`\n"
+                "    - Or unset SSIGN_PLMBLAST_FORCE_CPU if it's overriding auto-detect"
+            )
         raise RuntimeError(
-            f"pLM-BLAST embedding timed out after 4 hours: {e}\n"
-            f"  How to fix:\n"
-            f"    - Reduce query size\n"
-            f"    - Use a GPU (--cuda) — embedding is ~100x faster"
+            f"pLM-BLAST embedding timed out after 4 hours: {e}\n  How to fix:\n    - Reduce query size\n{gpu_hint}"
         ) from e
     if result.returncode != 0:
         logger.error(f"pLM-BLAST embedding failed:\n{result.stderr[:1000]}")

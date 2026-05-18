@@ -8,6 +8,7 @@ pure-Python helper that parses pLM-BLAST's CSV output.
 import os
 
 from run_plm_blast import (
+    _use_cuda_for_embedding,
     load_substrate_ids,
     parse_plmblast_csv,
     write_substrates_only_fasta,
@@ -60,9 +61,7 @@ class TestParsePlmblastCsv:
         path = os.path.join(tmp_dir, "plm_blast.csv")
         with open(path, "w") as f:
             f.write(
-                "qid,sid,score,qstart,qend,tstart,tend\n"
-                ",ecod_empty,0.5,1,10,1,10\n"
-                "GENE_X,ecod_real,0.9,1,100,1,100\n"
+                "qid,sid,score,qstart,qend,tstart,tend\n,ecod_empty,0.5,1,10,1,10\nGENE_X,ecod_real,0.9,1,100,1,100\n"
             )
 
         entries = parse_plmblast_csv(path)
@@ -135,3 +134,49 @@ class TestSubstrateFiltering:
         out = os.path.join(tmp_dir, "substrates.faa")
         n = write_substrates_only_fasta(src, {"G1", "NOT_IN_FASTA"}, out)
         assert n == 1
+
+
+class TestUseCudaForEmbedding:
+    """Regression coverage for the GPU auto-detect that controls --cuda on embeddings.py.
+
+    Pre-fix, the wrapper never passed --cuda regardless of GPU availability,
+    causing ProtT5 embedding to run on CPU on full-tier GPU nodes (~100x
+    slower). These tests pin the detection contract so a future refactor
+    doesn't silently regress it.
+    """
+
+    def test_force_cpu_env_var_overrides_detection(self, monkeypatch):
+        monkeypatch.setenv("SSIGN_PLMBLAST_FORCE_CPU", "1")
+        assert _use_cuda_for_embedding() is False
+
+    def test_force_cpu_accepts_alternate_truthy_values(self, monkeypatch):
+        for v in ("true", "TRUE", "yes", "Yes"):
+            monkeypatch.setenv("SSIGN_PLMBLAST_FORCE_CPU", v)
+            assert _use_cuda_for_embedding() is False, f"failed for value {v!r}"
+
+    def test_force_cpu_falsy_value_does_not_override(self, monkeypatch):
+        # An empty value (or "0", "false") should NOT force CPU — auto-detect wins.
+        monkeypatch.setenv("SSIGN_PLMBLAST_FORCE_CPU", "0")
+        # Result depends on whether torch + CUDA is available; we just verify
+        # the env-var didn't short-circuit to False the way "1" does.
+        try:
+            import torch
+
+            expected = bool(torch.cuda.is_available())
+        except ImportError:
+            expected = False
+        assert _use_cuda_for_embedding() is expected
+
+    def test_missing_torch_falls_back_to_cpu(self, monkeypatch):
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "torch":
+                raise ImportError("torch not installed (test stub)")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.delenv("SSIGN_PLMBLAST_FORCE_CPU", raising=False)
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        assert _use_cuda_for_embedding() is False
