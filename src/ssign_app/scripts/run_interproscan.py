@@ -57,6 +57,7 @@ def run_local_interproscan(
     output_dir,
     applications="",
     offline=False,
+    cpu=None,
 ):
     """Run InterProScan locally and return path to the TSV output.
 
@@ -68,7 +69,16 @@ def run_local_interproscan(
 
     `applications` restricts the member-DB scan; pass "" to use IPS
     defaults.
+
+    `cpu` controls IPS's `-cpu N` flag (worker count). `None` (default)
+    autodetects from `os.cpu_count()` so HPC nodes use all available
+    cores; pass an explicit integer to override. Without this flag IPS
+    falls back to its `interproscan.properties` defaults (typically 6
+    workers regardless of node CPU count), which silently throttles
+    runs on 16+ core nodes.
     """
+    if cpu is None:
+        cpu = max(1, (os.cpu_count() or 2))
     output_file = os.path.join(output_dir, "results.tsv")
     cmd = [
         "interproscan.sh",
@@ -80,6 +90,8 @@ def run_local_interproscan(
         "tsv",
         "-goterms",
         "-pathways",
+        "-cpu",
+        str(cpu),
     ]
     if offline:
         cmd.append("-dp")
@@ -193,6 +205,16 @@ def main():
             "would dominate runtime."
         ),
     )
+    parser.add_argument(
+        "--cpu",
+        type=int,
+        default=os.cpu_count() or 4,
+        help=(
+            "Worker count for InterProScan (-cpu N). Defaults to the host's "
+            "os.cpu_count() so HPC nodes saturate. Drop to 1-2 on shared "
+            "machines where IPS would otherwise compete with other work."
+        ),
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -215,6 +237,7 @@ def main():
             tmpdir,
             applications=args.applications,
             offline=args.offline,
+            cpu=args.cpu,
         )
         results_unique = parse_interproscan_tsv(tsv_path, set(unique_seqs.keys()))
 
