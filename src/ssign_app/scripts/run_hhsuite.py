@@ -240,6 +240,24 @@ def main():
             f"near-certain, ≥50 worth considering)."
         ),
     )
+    # Parallelism: two-layer (workers × cpu_per_job). cpu_per_job=2 stays
+    # load-bearing because hhblits/hhsearch scale sub-linearly above 2-4
+    # threads per process; widening it past 2 burns cores for little speedup.
+    # Default workers derives from os.cpu_count() so HPC nodes saturate
+    # (16-core node → 8 workers × 2 cpu = 16 cores in use, vs the previous
+    # hardcoded 4 workers × 2 cpu = 8 cores leaving half the node idle).
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=max(1, (os.cpu_count() or 4) // 2),
+        help="Concurrent hhblits/hhsearch processes (default: cpu_count // 2).",
+    )
+    parser.add_argument(
+        "--cpu-per-job",
+        type=int,
+        default=2,
+        help="Threads per hhblits/hhsearch process (default: 2).",
+    )
     args = parser.parse_args()
 
     if not args.pfam_db and not args.pdb70_db:
@@ -258,6 +276,8 @@ def main():
             args.pdb70_db,
             args.uniclust_db,
             tmpdir,
+            max_workers=args.max_workers,
+            cpu_per_job=args.cpu_per_job,
             min_prob=args.min_prob,
         )
 
