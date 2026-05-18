@@ -95,7 +95,9 @@ ssign is offline-first: the canonical execution path uses local DLP and
 SignalP installs. Users without a DTU academic licence can opt into the
 DTU webserver fallback with `--deeplocpro-mode remote` and
 `--signalp-mode remote` (no licence needed on the user's part, internet
-required).
+required). The webserver path is an opt-in convenience whose long-term
+availability depends on DTU; local installs are the durable choice for
+publication and cohort work.
 
 ## Phase 4: substrate identification
 

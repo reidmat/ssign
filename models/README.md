@@ -42,8 +42,10 @@ Ole, the DeepLocPro maintainer; treated as user-acquires-it for now.
 
 ssign is offline-first, so the canonical path uses local DTU installs.
 Users without a DTU licence can opt into the DTU webserver fallback with
-`--signalp-mode remote --deeplocpro-mode remote`. See
-[`docs/how-to/install.md`](../docs/how-to/install.md).
+`--signalp-mode remote --deeplocpro-mode remote`; this is a convenience
+path for trial runs and licence-free use, and depends on DTU continuing
+to host the service. For reproducible / paper-grade work, install
+locally. See [`docs/how-to/install.md`](../docs/how-to/install.md).
 
 ## Integrity checking (post-v1.0.0)
 

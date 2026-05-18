@@ -168,8 +168,10 @@ def _add_run_parser(subparsers: argparse._SubParsersAction) -> None:
         "--deeplocpro-mode",
         choices=["local", "remote"],
         default="local",
-        help="DeepLocPro execution mode (default: local, DTU academic licence required); "
-        "'remote' submits to the DTU webserver.",
+        help="DeepLocPro execution mode (default: local, canonical path, DTU "
+        "academic licence required); 'remote' is an opt-in fallback that "
+        "submits to the DTU webserver — no licence needed, but depends on DTU "
+        "keeping the service running.",
     )
     g.add_argument(
         "--deeplocpro-path",
@@ -180,8 +182,10 @@ def _add_run_parser(subparsers: argparse._SubParsersAction) -> None:
         "--signalp-mode",
         choices=["local", "remote"],
         default="local",
-        help="SignalP execution mode (default: local, DTU academic licence required); "
-        "'remote' submits to the DTU webserver.",
+        help="SignalP execution mode (default: local, canonical path, DTU "
+        "academic licence required); 'remote' is an opt-in fallback that "
+        "submits to the DTU webserver — no licence needed, but depends on DTU "
+        "keeping the service running.",
     )
     g.add_argument(
         "--signalp-path",

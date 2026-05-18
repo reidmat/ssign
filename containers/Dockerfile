@@ -123,12 +123,13 @@ RUN mkdir -p /home/ssign/.ssign/databases /home/ssign/.ssign/models /work \
 
 # Conservative DTU + EggNOG handling (plan addendum E.4 + addendum 10 J.1/J.2):
 # - DTU SignalP: NOT bundled. DTU confirmed 2026-05-07 the licence does not
-#   permit redistribution (final). Users either bind-mount a local install
-#   onto /opt/signalp6/ and pass --signalp-path, or override the new
-#   offline-first default with --signalp-mode remote.
+#   permit redistribution (final). Canonical path is to bind-mount a local
+#   install onto /opt/signalp6/ and pass --signalp-path. Users without a
+#   DTU licence can opt into the DTU webserver with --signalp-mode remote
+#   (convenience fallback; depends on DTU keeping the service alive).
 # - DTU DeepLocPro: NOT bundled. Awaiting Ole's redistribution reply; if
 #   permitted, add `COPY deeplocpro/ /opt/deeplocpro/` here per plan E.6.
-#   Same opt-in pattern as SignalP for now.
+#   Same opt-in webserver fallback pattern as SignalP for now.
 # - EggNOG-mapper code + database: NEITHER bundled (biopython conflict
 #   noted above). Users install eggnog-mapper on the host
 #   (`conda install -c bioconda eggnog-mapper`) and run

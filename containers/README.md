@@ -39,13 +39,15 @@ top of `Dockerfile`.
 ## Run (Docker)
 
 ssign is offline-first: the DTU prediction tools default to local mode.
-The image does not bundle SignalP or DeepLocPro (DTU licence terms),
-so either bind-mount your host install and point ssign at it, or pass
-`--signalp-mode remote --deeplocpro-mode remote` to fall back to the
-DTU webserver.
+The image does not bundle SignalP or DeepLocPro (DTU licence terms);
+the canonical pattern is to bind-mount your host install and point
+ssign at it. For users without a DTU licence, the DTU webserver is
+available as an opt-in fallback (`--signalp-mode remote
+--deeplocpro-mode remote`) — see the note below the example for the
+caveats.
 
 ```bash
-# With local SignalP and DeepLocPro on the host
+# Canonical: local SignalP and DeepLocPro on the host
 docker run --gpus all --rm \
     -v $HOME/.ssign/databases:/home/ssign/.ssign/databases:ro \
     -v $HOME/.ssign/models:/home/ssign/.ssign/models:ro \
@@ -56,7 +58,9 @@ docker run --gpus all --rm \
         --signalp-path /opt/signalp6/bin \
         --deeplocpro-path /opt/deeplocpro
 
-# Or: opt into the DTU webserver (no local install needed)
+# Opt-in fallback: DTU webserver (no local install or licence needed,
+# but depends on DTU keeping the service alive — fine for trials and
+# users without a DTU licence, not recommended for paper-grade runs)
 docker run --gpus all --rm \
     -v $HOME/.ssign/databases:/home/ssign/.ssign/databases:ro \
     -v $HOME/.ssign/models:/home/ssign/.ssign/models:ro \

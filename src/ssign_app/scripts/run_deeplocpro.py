@@ -2,8 +2,12 @@
 """Run DeepLocPro and parse output to standard format.
 
 Two modes:
-- local: requires DTU academic license, user provides install path.
-- remote: submits directly to DTU web server (free, no license needed).
+- local: canonical path. Requires DTU academic licence; user provides
+  install path.
+- remote: opt-in fallback for users without a DTU licence. Submits to
+  the DTU web server (free, no licence needed) and depends on DTU
+  keeping the service alive — fine for trial runs, not recommended for
+  long-running cohorts or paper-grade reproducibility.
 
 Output columns: locus_tag, predicted_localization, extracellular_prob,
 periplasmic_prob, outer_membrane_prob, cytoplasmic_prob, product

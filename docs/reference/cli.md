@@ -63,9 +63,9 @@ accepts a `--no-<flag>` inverse (e.g. `--skip-blastp` and `--no-skip-blastp`).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--deeplocpro-mode` | choice | `local` | `local` (canonical, DTU academic licence required) or `remote` (DTU webserver, no licence needed). |
+| `--deeplocpro-mode` | choice | `local` | `local` (canonical, DTU academic licence required) or `remote` (opt-in fallback: DTU webserver, no licence needed but depends on DTU hosting the service). |
 | `--deeplocpro-path` | path | `""` | Path to local DeepLocPro install. Empty falls back to `deeplocpro` on `PATH`. |
-| `--signalp-mode` | choice | `local` | `local` or `remote` (DTU webserver). DTU does not redistribute SignalP 6.0; local users obtain it from the DTU portal. |
+| `--signalp-mode` | choice | `local` | `local` (canonical; obtain SignalP 6.0 from the DTU portal — DTU does not redistribute it) or `remote` (opt-in fallback: DTU webserver, no licence needed but depends on DTU hosting the service). |
 | `--signalp-path` | path | `""` | Path to local SignalP 6 install. Empty falls back to `signalp6` on `PATH`. |
 | `--skip-signalp` | bool | `false` | Skip the SignalP step. |
 | `--skip-deepsece` | bool | `false` | Skip the DeepSecE step. |

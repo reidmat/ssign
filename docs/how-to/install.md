@@ -1,9 +1,11 @@
 # Installing optional tools
 
 `pip install ssign` gets you the base pipeline: secretion-system detection,
-secreted-protein prediction (DeepLocPro and SignalP via DTU's webserver,
-PLM-Effector locally), proximity analysis, and reporting. The tools below
-extend what the pipeline reports and how it runs.
+secreted-protein prediction (DeepLocPro, SignalP, and PLM-Effector — see
+the DeepLocPro and SignalP sections below for installing the DTU tools
+locally, or for the opt-in webserver fallback when you don't have a DTU
+licence), proximity analysis, and reporting. The tools below extend what
+the pipeline reports and how it runs.
 
 The simplest path is one of the named tiers:
 
@@ -282,9 +284,13 @@ confirmed on 2026-05-07 that SignalP 6.0 cannot be redistributed**, so each
 user acquires it from the DTU portal directly (free academic licence).
 
 If you do not have a DTU licence (or just want to try ssign without one),
-opt into the DTU webserver fallback instead with `--signalp-mode remote`.
-The webserver requires no licence on your part and works on any machine
-with internet access.
+you can opt into the DTU webserver fallback instead with
+`--signalp-mode remote`. The webserver requires no licence on your part
+and works on any machine with internet access. Treat this as a
+convenience for first-time users and small pilots: the route depends on
+DTU continuing to host the service, which is outside our control and
+can rate-limit, change, or disappear over time. For anything you intend
+to publish or repeat, install locally.
 
 ### When the webserver fallback is fine
 
@@ -292,11 +298,13 @@ with internet access.
 - Quick first runs to evaluate ssign before installing DTU tools
 - Machines without a DTU licence
 
-### When to install locally
+### When to install locally (the canonical path)
 
 - Cohorts of >100 genomes where webserver throughput becomes the bottleneck
 - Air-gapped environments with no outbound HTTPS to DTU
 - Reproducible / paper-ready runs that need every tool fully offline
+- Any long-running project where you don't want a third-party webserver
+  on the critical path
 
 ### Install (Linux / macOS)
 
@@ -355,9 +363,11 @@ GPU recommended). DTU's licence terms for redistribution are pending
 clarification with Ole, the DeepLocPro maintainer (status as of 2026-05-08).
 For now, treat as user-acquires-it.
 
-If you do not have a DTU licence, opt into the DTU webserver fallback with
-`--deeplocpro-mode remote` (no licence needed on your part, internet
-required).
+If you do not have a DTU licence, opt into the DTU webserver fallback
+with `--deeplocpro-mode remote` (no licence needed on your part,
+internet required). Same caveat as SignalP: this is a convenience path
+that depends on DTU keeping the service alive, so use it for trial runs
+and install locally for production / paper work.
 
 ```bash
 # 1. Register at https://services.healthtech.dtu.dk/services/DeepLocPro-1.0/

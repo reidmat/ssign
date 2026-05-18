@@ -907,10 +907,13 @@ with tab_pipeline:
             )
             dlp_mode = st.radio(
                 "Running mode",
-                ["BioLib cloud (no install needed)", "Local install (DTU license)"],
+                ["Local install (DTU license)", "BioLib cloud (no install needed)"],
                 key="dlp_mode",
-                help="BioLib cloud: free, no license required, ~5-10 min per genome. "
-                "Local: faster, requires free DTU academic license + ~5 GB model.",
+                help="Local (canonical, recommended): faster, fully offline, requires "
+                "free DTU academic license + ~5 GB model. "
+                "BioLib cloud: opt-in fallback for users without a DTU licence — "
+                "free and no install, but depends on DTU keeping the webserver "
+                "running, so not recommended for long-running or paper-grade work.",
             )
             if "Local" in dlp_mode:
                 dlp_found = shutil.which("deeplocpro") is not None
@@ -949,9 +952,12 @@ with tab_pipeline:
             if run_signalp:
                 sp_mode = st.radio(
                     "Running mode",
-                    ["BioLib cloud (no install needed)", "Local install (DTU license)"],
+                    ["Local install (DTU license)", "BioLib cloud (no install needed)"],
                     key="sp_mode",
-                    help="BioLib cloud: free, ~2-5 min per genome. Local: faster, requires free DTU academic license.",
+                    help="Local (canonical, recommended): faster, fully offline, "
+                    "requires free DTU academic licence. BioLib cloud: opt-in "
+                    "fallback for users without a DTU licence — free and no "
+                    "install, but depends on DTU keeping the webserver running.",
                 )
                 if "Local" in sp_mode:
                     sp_found = shutil.which("signalp6") is not None

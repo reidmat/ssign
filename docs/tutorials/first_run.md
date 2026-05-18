@@ -6,20 +6,22 @@ Gram-negative reference: ~4.6 Mb, ~4,300 CDS, secretion systems and
 substrates that are well-described in the literature, so you can sanity-
 check what ssign reports against what you already know.
 
-About 30 minutes, mostly waiting for DTU's webserver.
+About 10-20 minutes on a typical laptop with the canonical local install
+of DeepLocPro and SignalP. The "quick taste" variant below skips the
+local DTU install and submits to DTU's webserver instead; that route adds
+a network-bound wait and is fine for a single-genome trial run.
 
 ## Prerequisites
 
 - Linux or macOS
 - Python 3.10 or newer (`python3 --version`)
-- An internet connection (this tutorial uses the DTU webserver fallback for
-  DeepLocPro and SignalP, so no DTU licence is required on your part)
+- Local installs of SignalP 6.0 and DeepLocPro, set up per
+  [`how-to/install.md`](../how-to/install.md). Both are free with a DTU
+  academic licence and run fully offline. If you do not have a DTU
+  licence yet, the "Quick taste without DTU tools" section near the end
+  shows a webserver variant you can use instead.
 - ~10 GB of free disk: ~3 GB for the install (PyTorch + ESM) and ~7 GB
   downloaded on first DeepSecE run for the cached ESM-1b language model
-
-No GPU, no DTU licence, no system packages required. For a fully offline
-run with local DTU tools (the canonical ssign mode), see
-[`how-to/install.md`](../how-to/install.md).
 
 ## 1. Install ssign
 
@@ -54,15 +56,13 @@ The file is ~13 MB.
 
 The base tier (`pip install ssign` with no extras) covers secretion-system
 detection, secreted-protein prediction, proximity analysis, and reporting.
-For a tutorial run we opt into the DTU webserver fallback for DLP and
-SignalP (no licence needed) and skip the annotation tools that need their
+With SignalP and DeepLocPro installed locally per `install.md`, the
+canonical run command just skips the annotation tools that need their
 own databases (BLASTp, HH-suite, EggNOG, InterProScan, pLM-BLAST):
 
 ```bash
 ssign run ecoli_k12.gbff --outdir ecoli_results \
     --use-input-annotations \
-    --signalp-mode remote \
-    --deeplocpro-mode remote \
     --skip-blastp \
     --skip-eggnog \
     --skip-hhsuite \
@@ -76,16 +76,41 @@ What that command says, in plain English:
 - Write outputs to `./ecoli_results/`.
 - Trust the input GenBank's existing annotations rather than re-annotating
   with Bakta. (Bakta is not installed in the base tier.)
-- Use the DTU webserver fallback for SignalP and DeepLocPro, so we don't
-  need a DTU academic licence for this first run.
+- SignalP and DeepLocPro default to local mode, so ssign will look for
+  the binaries on `PATH` (or whichever directory you gave to
+  `--signalp-path` / `--deeplocpro-path`).
 - Skip the five annotation tools that need extra databases. Everything
   else (DeepLocPro, SignalP, DeepSecE predictions, MacSyFinder detection,
   proximity analysis, ProtParam, reporting) runs as normal.
 
-ssign will print step-by-step progress with percentages. The two slowest
-steps are DeepLocPro and SignalP, both submitted to DTU's webserver and
-queued behind other users (a few minutes each, usually). DeepSecE runs
-locally; on a CPU it takes a few minutes for a typical genome.
+ssign will print step-by-step progress with percentages. DeepSecE is
+usually the slowest step on a CPU; DeepLocPro and SignalP take a few
+minutes each on a modern laptop when run locally.
+
+### Quick taste without DTU tools
+
+If you have not installed SignalP and DeepLocPro locally yet and just
+want to see ssign produce output, swap in the DTU webserver. No licence
+required on your part, but the run will take longer (network round-trip
+plus DTU queueing) and depends on DTU continuing to host the service.
+The webserver is fine for a one-off trial; for paper-grade or
+multi-genome work, install locally per `install.md` so your pipeline is
+not at the mercy of a third-party service.
+
+```bash
+ssign run ecoli_k12.gbff --outdir ecoli_results \
+    --use-input-annotations \
+    --signalp-mode remote \
+    --deeplocpro-mode remote \
+    --skip-blastp \
+    --skip-eggnog \
+    --skip-hhsuite \
+    --skip-interproscan \
+    --skip-plmblast
+```
+
+In this variant the DLP and SignalP steps submit batches to DTU and
+poll for results; expect ~30 minutes total wall time, mostly waiting.
 
 ## 4. Look at the output
 

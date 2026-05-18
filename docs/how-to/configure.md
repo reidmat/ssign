@@ -91,14 +91,19 @@ ssign run input.gbff --outdir results \
     --deeplocpro-path /path/to/deeplocpro
 ```
 
-If you do not have a DTU licence, opt into the DTU webserver fallback
-(no licence needed on your part, internet required):
+If you do not have a DTU licence, you can opt into the DTU webserver
+fallback (no licence needed on your part, internet required):
 
 ```bash
 ssign run input.gbff --outdir results \
     --signalp-mode remote \
     --deeplocpro-mode remote
 ```
+
+The webserver path is a convenience for users without a DTU licence and
+for first-time trials. It depends on DTU continuing to host the service,
+which we cannot guarantee long-term — for paper-grade or long-running
+cohorts, install SignalP and DeepLocPro locally instead.
 
 See [`how-to/install.md`](install.md) for the SignalP / DeepLocPro local
 install steps.

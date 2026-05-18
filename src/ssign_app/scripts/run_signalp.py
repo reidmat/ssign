@@ -2,8 +2,11 @@
 """Run SignalP 6.0 and parse output to standard format.
 
 Two modes:
-- local: requires DTU academic license download.
-- remote: submits directly to DTU web server (free, no license needed).
+- local: canonical path. Requires DTU academic licence download.
+- remote: opt-in fallback for users without a DTU licence. Submits to
+  the DTU web server (free, no licence needed) and depends on DTU
+  keeping the service alive — fine for trial runs, not recommended for
+  long-running cohorts or paper-grade reproducibility.
 
 SignalP predicts signal peptides: Sec/SPI, Sec/SPII, Tat/SPI, Tat/SPII, Sec/SPIII.
 
