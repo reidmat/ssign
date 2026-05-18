@@ -315,29 +315,47 @@ pLM-BLAST. **Install SignalP into its own env** and point ssign at the
 binary.
 
 ```bash
-# 1. Register and download from DTU (academic email required):
+# 1. Register and request a download at
 #    https://services.healthtech.dtu.dk/services/SignalP-6.0/
-#    Pick the "fast" model variant (signalp-6.0i.fast.tar.gz, ~1.5 GB).
+#    (academic email required). DTU emails / displays a one-time URL.
+#    The URL points at an Apache *directory listing*, NOT a file. The
+#    directory contains:
+#        signalp-6.0_license.txt
+#        signalp-6.0i.fast.tar.gz   <-- the ~1.5 GB tarball to wget
 
-# 2. Create a dedicated Python 3.10 env (micromamba example):
-micromamba create -n signalp6 -c conda-forge python=3.10 pip "numpy<2" -y
-micromamba activate signalp6
+# 2. Append the filename to the directory URL and wget on the install
+#    machine directly. If you get back a tiny (1-2 KB) HTML file instead
+#    of the tarball, your URL is missing the trailing filename.
+mkdir -p ~/build && cd ~/build
+wget -O signalp6.tar.gz "https://services.healthtech.dtu.dk/download/<your-token>/signalp-6.0i.fast.tar.gz"
+ls -lh signalp6.tar.gz        # ~1.5 GB
+file signalp6.tar.gz          # "gzip compressed data"
 
-# 3. Pre-install CPU-only torch<2 BEFORE the package, so torch 2.x isn't
-#    pulled in transitively (also keeps the wheel small at ~150 MB):
-pip install "torch<2.0" --index-url https://download.pytorch.org/whl/cpu
+# 3. Create a dedicated Python 3.10 env. Any conda-family tool works:
+#    mamba, micromamba, conda. On HPC you typically `module load` one.
+mamba create -n signalp6 -c conda-forge python=3.10 pip "numpy<2" -y
 
-# 4. Extract and install:
-tar xzf ~/Downloads/signalp-6.0i.fast.tar.gz -C ~/build
-cd ~/build/signalp6_fast
-pip install ./signalp-6-package/
+# 4. Use the env's binaries by absolute path — avoids needing `mamba init`
+#    (which would permanently modify your shell rc). Works identically
+#    on a laptop and inside an HPC JupyterHub / batch job.
+PYBIN=~/.conda/envs/signalp6/bin     # adjust if your conda envs live elsewhere
+$PYBIN/pip install "torch<2.0" --index-url https://download.pytorch.org/whl/cpu
+$PYBIN/python -c "import torch, numpy; print(torch.__version__, numpy.__version__)"
+# expected: 1.13.x+cpu  1.26.x
 
-# 5. Copy the model weights into the installed package directory:
-SIGNALP_DIR=$(python -c "import signalp, os; print(os.path.dirname(signalp.__file__))")
+# 5. Extract + install the SignalP package.
+tar xzf signalp6.tar.gz       # creates signalp6_fast/ with signalp-6-package inside
+cd signalp6_fast
+$PYBIN/pip install ./signalp-6-package/
+
+# 6. Copy the model weights into the installed package. `pip install`
+#    only installs ~10 MB of Python code; the ~1.4 GB of weights ship
+#    separately in the tarball at signalp-6-package/models/.
+SIGNALP_DIR=$($PYBIN/python -c "import signalp, os; print(os.path.dirname(signalp.__file__))")
 cp -r signalp-6-package/models/* "$SIGNALP_DIR/model_weights/"
 
-# 6. Verify:
-signalp6 --version
+# 7. Verify
+$PYBIN/signalp6 --version
 ```
 
 ### Wire ssign to the local install
@@ -345,7 +363,7 @@ signalp6 --version
 ```bash
 ssign run input.gbff --outdir results \
     --signalp-mode local \
-    --signalp-path ~/micromamba/envs/signalp6/bin
+    --signalp-path ~/.conda/envs/signalp6/bin
 ```
 
 Pass the directory containing the `signalp6` console script (typically
@@ -369,14 +387,47 @@ internet required). Same caveat as SignalP: this is a convenience path
 that depends on DTU keeping the service alive, so use it for trial runs
 and install locally for production / paper work.
 
+DTU serves DeepLocPro the same way as SignalP, so the same gotchas apply:
+the download URL is an Apache directory listing rather than a direct file,
+and the install lives best in its own conda-family env to avoid clashing
+with ssign's pinned numpy / torch / transformers.
+
 ```bash
-# 1. Register at https://services.healthtech.dtu.dk/services/DeepLocPro-1.0/
-# 2. Download and install per DTU's instructions
-# 3. Wire ssign to the install:
+# 1. Register and request a download at
+#    https://services.healthtech.dtu.dk/services/DeepLocPro-1.0/
+#    (academic email required). DTU emails / displays a one-time URL.
+
+# 2. Open the URL in a browser or `wget` it to see the directory listing.
+#    Note the filename DTU is shipping today (it changes between releases)
+#    and append it to the URL for the actual download. If you get a 1-2 KB
+#    HTML file instead of the tarball, your URL is missing the filename.
+mkdir -p ~/build && cd ~/build
+wget -O deeplocpro.tar.gz "https://services.healthtech.dtu.dk/download/<your-token>/<filename-from-the-listing>"
+ls -lh deeplocpro.tar.gz      # several GB
+file deeplocpro.tar.gz        # "gzip compressed data"
+
+# 3. Create a dedicated env. DeepLocPro is happier than SignalP with
+#    modern Python and torch, but isolating it keeps version surprises
+#    out of your ssign venv.
+mamba create -n deeplocpro -c conda-forge python=3.11 pip -y
+PYBIN=~/.conda/envs/deeplocpro/bin
+
+# 4. Follow DTU's bundled install instructions inside the extracted
+#    tarball (typically a `pip install ./deeplocpro-package/` + a
+#    model-weights copy step). Use $PYBIN for pip / python so you don't
+#    need to `mamba init` your shell. Verify with:
+$PYBIN/deeplocpro --version
+
+# 5. Wire ssign to the install:
 ssign run input.gbff --outdir results \
     --deeplocpro-mode local \
-    --deeplocpro-path /path/to/deeplocpro
+    --deeplocpro-path ~/.conda/envs/deeplocpro/bin
 ```
+
+`--deeplocpro-path` takes the directory containing the `deeplocpro`
+console script. If the tarball ships a different binary name in a future
+release, point `--deeplocpro-path` at whichever directory makes that
+binary importable.
 
 ---
 

@@ -171,6 +171,32 @@ python -c "import torch; print(torch.cuda.is_available())"
 If `nvidia-smi` is missing or reports no GPU, ssign falls back to CPU
 silently for DeepSecE and skips PLM-Effector entirely.
 
+## 4a. Installing DTU tools on HPC
+
+SignalP 6.0 and DeepLocPro both come from DTU HealthTech via one-time
+download URLs that point at *Apache directory listings*, not files. Two
+HPC-specific gotchas catch users out:
+
+1. **Append the filename to the URL when you wget**, otherwise you get a
+   1-2 KB HTML index page rather than the ~1.5 GB tarball.
+2. **Don't `mamba init` your shell on HPC.** Cluster shell profiles are
+   often shared or sandboxed, and `init` writes to your rc file. Use the
+   conda env's absolute paths instead (`PYBIN=~/.conda/envs/<env>/bin`,
+   then `$PYBIN/pip ...`, `$PYBIN/python ...`). The install commands in
+   [`install.md`](install.md) follow this pattern.
+
+Step-by-step instructions are in [`install.md`](install.md#signalp-60)
+for SignalP and [`install.md`](install.md#deeplocpro) for DeepLocPro.
+Both go into isolated conda envs and ssign points at them via
+`--signalp-path` / `--deeplocpro-path` (the directory containing the
+console script). After install:
+
+```bash
+ssign run input.gbff --outdir results \
+    --signalp-mode local --signalp-path ~/.conda/envs/signalp6/bin \
+    --deeplocpro-mode local --deeplocpro-path ~/.conda/envs/deeplocpro/bin
+```
+
 ## 5. Walltime considerations
 
 Approximate per-genome wall time at extended tier on a 16-core compute
