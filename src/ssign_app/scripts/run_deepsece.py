@@ -328,15 +328,31 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
     finally:
         torch.load = _orig_torch_load
 
-    # Load checkpoint — use mmap + map_location to avoid device mismatch
+    # Move model to device BEFORE loading the checkpoint. `torch.load(...,
+    # mmap=True)` silently ignores `map_location=device` (mmap forces
+    # file-backed CPU storage), and `.to(device)` after `load_state_dict`
+    # doesn't reliably migrate the mmap-backed ESM-1b sub-module —
+    # observed as ~30-60x slowdown on A40 (87 min vs ~2 min for 93
+    # proteins). Upstream `DeepSecE/predict.py` follows this order.
+    model.to(device)
+
     logger.info(f"Loading checkpoint from {checkpoint}...")
-    # FRAGILE: Checkpoint loading can fail with MemoryError or corrupted file
+    # mmap=True is preserved on the CPU path to keep peak RAM low on
+    # 16 GB-class machines (ESM-1b is already 7.3 GB resident). On the
+    # CUDA path mmap is dropped because it would defeat `map_location`
+    # and put us back in the GPU-not-used regression above.
+    # FRAGILE: Checkpoint loading can fail with MemoryError or corrupted file.
     # If this breaks: re-download the checkpoint or ensure sufficient RAM
+    load_kwargs = {"map_location": device, "weights_only": True}
+    if device.type == "cpu":
+        load_kwargs["mmap"] = True
     try:
-        state_dict = torch.load(checkpoint, map_location=device, weights_only=True, mmap=True)
+        state_dict = torch.load(checkpoint, **load_kwargs)
         model.load_state_dict(state_dict, strict=False)
         del state_dict
         gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
     except MemoryError as e:
         raise RuntimeError(
             f"Out of memory loading DeepSecE checkpoint: {e}\n"
@@ -347,7 +363,17 @@ def run_deepsece(input_fasta, output_dir, checkpoint_path=None, batch_size=1):
             f"    - Close other applications to free memory"
         ) from e
 
-    model.to(device)
+    # Regression guard against the mmap+map_location footgun.
+    esm_param_device = next(model.pretrained_model.parameters()).device
+    if esm_param_device.type != device.type:
+        raise RuntimeError(
+            f"DeepSecE ESM-1b parameters on {esm_param_device}, expected "
+            f"{device}. Likely cause: torch.load(mmap=True) silently "
+            f"overriding map_location, or model.to(device) called before "
+            f"load_state_dict reintroducing CPU tensors. See the comments "
+            f"above model.to(device) in run_deepsece.py."
+        )
+
     model.eval()
 
     # Load sequences
