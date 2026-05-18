@@ -49,11 +49,39 @@ recommended; CPU runs are slow.
 Bakta provides annotation-grade gene calling and functional descriptions.
 ssign re-annotates inputs with Bakta by default; if Bakta is not installed,
 the pipeline falls back to a pyrodigal-only call without functional
-annotations. Install + download the light database (~2 GB):
+annotations.
+
+**Important:** `pip install ssign[bakta]` only installs the Bakta Python
+wrapper. Bakta also depends on several binary tools (AMRFinderPlus,
+DIAMOND, HMMER, tRNAscan-SE, aragorn) that aren't pip-installable. Without
+them, **even `bakta_db download` fails** because Bakta's startup runs the
+same dependency check as `bakta` itself.
+
+The cleanest install is **all of Bakta via conda**, which pulls every
+binary dep with one command:
 
 ```bash
-source ~/.ssign-env/bin/activate
-pip install ssign[bakta]
+mamba install -n base -c bioconda bakta -y
+# or into its own env:
+mamba create -n bakta -c bioconda bakta -y
+export PATH=~/.conda/envs/bakta/bin:$PATH    # if using a dedicated env
+```
+
+If you'd rather keep Bakta in the ssign Python env (`pip install ssign[bakta]`)
+and only add the missing binaries, the minimum for **DB download** is
+AMRFinderPlus:
+
+```bash
+mamba install -c bioconda ncbi-amrfinderplus -y
+```
+
+For actually running Bakta on a genome you'll also want `diamond hmmer
+trnascan-se aragorn` from bioconda. Easier to just `mamba install bakta`
+upfront.
+
+Then download the light database (~2 GB):
+
+```bash
 bakta_db download --output ~/bakta_db --type light
 ```
 

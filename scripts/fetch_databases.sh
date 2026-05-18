@@ -217,6 +217,14 @@ fetch_bakta() {
     _log "==> Bakta DB ($variant, $size_hint)"
 
     _require_command bakta_db "pip install ssign[bakta]"
+    # bakta_db's startup runs the same dependency check as `bakta` itself,
+    # which fails fast if AMRFinderPlus is not on PATH — even though the
+    # tool isn't actually needed for downloading the DB. `pip install
+    # ssign[bakta]` only pulls the Python wrapper; AMRFinderPlus is a
+    # separate NCBI binary. Catch it here with a useful pointer instead
+    # of letting bakta_db crash mid-run.
+    _require_command amrfinder \
+        "mamba install -c bioconda ncbi-amrfinderplus  (or 'mamba create -n bakta -c bioconda bakta' to get every Bakta binary dep at once)"
 
     local dir="$TARGET/bakta"
     # bakta_db creates either db/ or db-light/ inside --output depending on
